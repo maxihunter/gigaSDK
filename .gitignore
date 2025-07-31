@@ -1,11 +1,14 @@
 # Prerequisites
 *.d
+*~
+tags
 
 # Object files
 *.o
 *.ko
 *.obj
 *.elf
+*.lst
 
 # Linker output
 *.ilk
@@ -35,6 +38,7 @@
 *.i*86
 *.x86_64
 *.hex
+*.bin
 
 # Debug files
 *.dSYM/
