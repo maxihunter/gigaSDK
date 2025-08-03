@@ -84,26 +84,26 @@
 #ifndef ILI9341_STM32_DRIVER_H
 #define ILI9341_STM32_DRIVER_H
 
-#include "stm32f2xx_hal.h"
+#include "stm32f4xx_hal.h"
 
 
 #define ILI9341_SCREEN_HEIGHT 240 
 #define ILI9341_SCREEN_WIDTH 	320
 
 //SPI INSTANCE
-#define HSPI_INSTANCE							&hspi1
+#define HSPI_INSTANCE							&hspi2
 
 //CHIP SELECT PIN AND PORT, STANDARD GPIO
 #define LCD_CS_PORT								GPIOB
-#define LCD_CS_PIN								GPIO_PIN_6
+#define LCD_CS_PIN								GPIO_PIN_0
 
 //DATA COMMAND PIN AND PORT, STANDARD GPIO
 #define LCD_DC_PORT								GPIOB
-#define LCD_DC_PIN								GPIO_PIN_4
+#define LCD_DC_PIN								GPIO_PIN_2
 
 //RESET PIN AND PORT, STANDARD GPIO
 #define	LCD_RST_PORT							GPIOB
-#define	LCD_RST_PIN								GPIO_PIN_5
+#define	LCD_RST_PIN								GPIO_PIN_1
 
 
 #define BURST_MAX_SIZE 	500

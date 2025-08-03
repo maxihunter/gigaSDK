@@ -47,7 +47,7 @@
 #ifndef ILI9341_GFX_H
 #define ILI9341_GFX_H
 
-#include "stm32f2xx_hal.h"
+#include "stm32f4xx_hal.h"
 
 #define HORIZONTAL_IMAGE	0
 #define VERTICAL_IMAGE		1

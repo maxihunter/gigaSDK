@@ -23,6 +23,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "ILI9341_STM32_Driver.h"
+#include "ILI9341_GFX.h"
+#include "snow_tiger.h"
+#include "string.h"
 
 /* USER CODE END Includes */
 
@@ -108,26 +111,52 @@ int main(void)
   {
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
     ILI9341_Fill_Screen(YELLOW);
+    ILI9341_Draw_Text("NEW TEXT", 0, 0, WHITE, 2, BLACK);
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-    HAL_Delay(1000);
-    ILI9341_Fill_Screen(RED);
+    HAL_Delay(4000);
+    ILI9341_Draw_Image(snow_tiger, 2);
+    //ILI9341_Fill_Screen(RED);
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-    HAL_Delay(1000);
+    HAL_Delay(4000);
+    uint32_t tickstart;
+    uint32_t frate;
+    tickstart = HAL_GetTick();
     ILI9341_Fill_Screen(BLUE);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-    HAL_Delay(1000);
     ILI9341_Fill_Screen(GREEN);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-    HAL_Delay(1000);
     ILI9341_Fill_Screen(PINK);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-    HAL_Delay(1000);
     ILI9341_Fill_Screen(OLIVE);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-    HAL_Delay(1000);
     ILI9341_Fill_Screen(NAVY);
+    ILI9341_Fill_Screen(PURPLE);
+    ILI9341_Fill_Screen(MAROON);
+    ILI9341_Fill_Screen(LIGHTGREY);
+    ILI9341_Fill_Screen(CYAN);
+    ILI9341_Fill_Screen(MAGENTA);
+    ILI9341_Fill_Screen(YELLOW);
+    ILI9341_Fill_Screen(ORANGE);
+    ILI9341_Fill_Screen(GREENYELLOW);
+    ILI9341_Fill_Screen(WHITE);
+    ILI9341_Fill_Screen(BLUE);
+    ILI9341_Fill_Screen(GREEN);
+    ILI9341_Fill_Screen(PINK);
+    ILI9341_Fill_Screen(OLIVE);
+    ILI9341_Fill_Screen(NAVY);
+    ILI9341_Fill_Screen(PURPLE);
+    ILI9341_Fill_Screen(MAROON);
+    ILI9341_Fill_Screen(LIGHTGREY);
+    ILI9341_Fill_Screen(CYAN);
+    ILI9341_Fill_Screen(MAGENTA);
+    ILI9341_Fill_Screen(YELLOW);
+    ILI9341_Fill_Screen(ORANGE);
+    uint32_t secs = (HAL_GetTick() - tickstart) / 1000;
+    if (secs == 0) secs = 1;
+    frate = 25 / secs;
+    char info[15] = {0};
+    memcpy(info, "FR: ", 4);
+    info[4] = '0' + (frate/10);
+    info[5] = '0' + (frate%10);
+    ILI9341_Draw_Text(info, 10, 10, WHITE, 2, BLACK);
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-    HAL_Delay(1000);
+    HAL_Delay(5000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -172,7 +201,7 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)

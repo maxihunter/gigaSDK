@@ -82,7 +82,7 @@ if(TP_Touchpad_Pressed())
 #ifndef TOUCH_H
 #define TOUCH_H
 
-#include "stm32f2xx_hal.h"
+#include "stm32f4xx_hal.h"
 
 
 #define TP_CLK_PORT								GPIOE

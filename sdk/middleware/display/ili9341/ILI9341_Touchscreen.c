@@ -80,7 +80,7 @@ if(TP_Touchpad_Pressed())
 
 
 #include "ILI9341_Touchscreen.h"
-#include "stm32f7xx_hal.h"
+#include "stm32f4xx_hal.h"
 
 //Internal Touchpad command, do not call directly
 uint16_t TP_Read(void)

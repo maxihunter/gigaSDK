@@ -1,6 +1,7 @@
 # Prerequisites
 *.d
 *~
+tags
 
 # Object files
 *.o
