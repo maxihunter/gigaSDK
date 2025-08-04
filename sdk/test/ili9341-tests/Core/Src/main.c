@@ -26,6 +26,7 @@
 #include "ILI9341_GFX.h"
 #include "snow_tiger.h"
 #include "string.h"
+#include <stdio.h>
 
 /* USER CODE END Includes */
 
@@ -46,7 +47,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 SD_HandleTypeDef hsd;
-
+unsigned int sd_error = 0;
 SPI_HandleTypeDef hspi2;
 
 /* USER CODE BEGIN PV */
@@ -100,27 +101,59 @@ int main(void)
   MX_SPI2_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
+  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
+  //HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
   ILI9341_Init();
+  FATFS fs;
+  FRESULT res;
+  res = f_mount(&fs, SDPath, 1);
+  if (res != FR_OK) {
+      sd_error = 1;
+  }
+  DIR dir;
+  FILINFO fno;
 
+  ILI9341_Fill_Screen(BLACK);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-    ILI9341_Fill_Screen(YELLOW);
-    ILI9341_Draw_Text("NEW TEXT", 0, 0, WHITE, 2, BLACK);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
+    char buff[64] = {0};
+    ILI9341_Draw_Text("SD INFO: ", 0, 0, WHITE, 2, BLACK);
+    if (sd_error == 0) {
+        snprintf(buff, 64, "BS:%lu", hsd.SdCard.BlockSize);
+        ILI9341_Draw_Text(buff, 0, 15, WHITE, 2, BLACK);
+        snprintf(buff, 64, "Bnbr:%lu", hsd.SdCard.BlockNbr);
+        ILI9341_Draw_Text(buff, 0, 30, WHITE, 2, BLACK);
+        snprintf(buff, 64, "CS:%lu", hsd.SdCard.BlockSize * hsd.SdCard.BlockNbr / 1000);
+        ILI9341_Draw_Text(buff, 0, 45, WHITE, 2, BLACK);
+        snprintf(buff, 64, "VER:%lu", hsd.SdCard.CardVersion);
+        ILI9341_Draw_Text(buff, 0, 60, WHITE, 2, BLACK);
+        unsigned int delta = 0;
+        f_opendir(&dir, "/");
+        do {
+            f_readdir(&dir, &fno);
+            if (fno.fname[0] != 0) {
+                snprintf(buff, 64, "%d: %s", delta+1, fno.fname);
+                ILI9341_Draw_Text(buff, 10, 75+(delta*15), WHITE, 2, BLACK);
+                delta++;
+            }
+        } while (fno.fname[0] != 0);
+        f_closedir(&dir);
+    } else {
+        ILI9341_Draw_Text("SD CARD ERROR", 0, 15, WHITE, 2, BLACK);
+        snprintf(buff, 64, "ERR:%lu", hsd.ErrorCode);
+        ILI9341_Draw_Text(buff, 10, 30, WHITE, 2, BLACK);
+    }
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
     HAL_Delay(4000);
-    ILI9341_Draw_Image(snow_tiger, 2);
-    //ILI9341_Fill_Screen(RED);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
+    //ILI9341_Draw_Image(snow_tiger, 2);
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
     HAL_Delay(4000);
-    uint32_t tickstart;
-    uint32_t frate;
-    tickstart = HAL_GetTick();
+    uint32_t tickstart = HAL_GetTick();
     ILI9341_Fill_Screen(BLUE);
     ILI9341_Fill_Screen(GREEN);
     ILI9341_Fill_Screen(PINK);
@@ -147,16 +180,13 @@ int main(void)
     ILI9341_Fill_Screen(MAGENTA);
     ILI9341_Fill_Screen(YELLOW);
     ILI9341_Fill_Screen(ORANGE);
-    uint32_t secs = (HAL_GetTick() - tickstart) / 1000;
-    if (secs == 0) secs = 1;
-    frate = 25 / secs;
-    char info[15] = {0};
-    memcpy(info, "FR: ", 4);
-    info[4] = '0' + (frate/10);
-    info[5] = '0' + (frate%10);
-    ILI9341_Draw_Text(info, 10, 10, WHITE, 2, BLACK);
-    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-    HAL_Delay(5000);
+    uint32_t secs = (HAL_GetTick() - tickstart);
+    if (secs <= 0) secs = 1;
+    uint32_t frate = 25000 / (secs);
+    ILI9341_Fill_Screen(BLACK);
+    snprintf(buff, 24, "FPS:%lu(%lu)", frate,secs);
+    ILI9341_Draw_Text(buff, 150, 0, WHITE, 2, BLACK);
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -339,6 +369,8 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
+    HAL_Delay(300);
   }
   /* USER CODE END Error_Handler_Debug */
 }
