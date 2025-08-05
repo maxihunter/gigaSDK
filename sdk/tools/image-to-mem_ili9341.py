@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# vim: set ai et ts=4 sw=4:
-
 from PIL import Image
 import sys
 import os
@@ -14,10 +12,15 @@ fname = sys.argv[1]
 
 img = Image.open(fname)
 
+print("#ifndef __%s__" % sys.argv[1].upper().replace(".", "_"));
+print("#define __%s__" % sys.argv[1].upper().replace(".", "_"));
+print("");
 print("// h = %s, w = %s " % (img.height, img.width));
-print("const uint8_t test_img[] = {");
+print("const PROGMEM uint8_t %s[] = {" % (sys.argv[1].split('.')[0]));
 
 #new_img = img.convert("RGB565");
+#new_name = sys.argv[0].split('.')[0] + "_rgb565.bmp"
+#new_img.save(new_name, "BMP")
 
 for y in range(0, img.height):
     s = ""
@@ -30,3 +33,5 @@ for y in range(0, img.height):
     print(s)
 
 print("};")
+
+print("#endif // __%s__" % sys.argv[1].upper().replace(".", "_"));

@@ -43,6 +43,7 @@ decoder/mp3/scalfact.c  \
 decoder/mp3/stproc.c  \
 decoder/mp3/subband.c  \
 decoder/mp3/trigtabs.c  \
+decoder/microlzw/microlzw.c  \
 fatfs/diskio.c  \
 fatfs/ff.c  \
 fatfs/ffsystem.c  \
