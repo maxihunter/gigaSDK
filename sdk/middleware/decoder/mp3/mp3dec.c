@@ -42,8 +42,8 @@
  **************************************************************************************/
 
 #include <string.h>
-#include "mp3common.h"	/* includes mp3dec.h (public API) and internal, platform-independent API */
-#include "asm.h"
+#include "mp3/mp3common.h"	/* includes mp3dec.h (public API) and internal, platform-independent API */
+//#include "asm.h"
 
 /**************************************************************************************
  * Function:    MP3InitDecoder

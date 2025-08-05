@@ -41,8 +41,8 @@
  * bitstream.c - bitstream unpacking, frame header parsing, side info parsing
  **************************************************************************************/
 
-#include "coder.h"
-#include "assembly.h"
+#include "mp3/coder.h"
+#include "mp3/assembly.h"
 
 /**************************************************************************************
  * Function:    SetBitstreamPointer

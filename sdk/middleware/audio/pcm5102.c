@@ -17,7 +17,7 @@
  *
  */
 
-#include "pcm5102.h"
+#include "audio/pcm5102.h"
 
 //инициализация I2S3
 void Init_DAC(void)

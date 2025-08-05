@@ -37,13 +37,13 @@ struct key_info {
 
 /** @brief Keymap array */
 const struct key_info key_map[] = {
-	{GPIOD, GPIO_PIN_0},
-	{GPIOD, GPIO_PIN_1},
-	{GPIOD, GPIO_PIN_2},
-	{GPIOD, GPIO_PIN_3},
-	{GPIOD, GPIO_PIN_4},
-	{GPIOD, GPIO_PIN_5},
-	{GPIOD, GPIO_PIN_6},
+	{GPIOB, GPIO_PIN_3},
+	{GPIOB, GPIO_PIN_4},
+	{GPIOB, GPIO_PIN_5},
+	{GPIOB, GPIO_PIN_6},
+	{GPIOB, GPIO_PIN_7},
+	{GPIOB, GPIO_PIN_8},
+	{GPIOB, GPIO_PIN_9},
 	{GPIOD, GPIO_PIN_7},
 }
 
@@ -56,3 +56,5 @@ uint32_t getKeyState() {
 	}
 	return keymap;
 }
+
+
