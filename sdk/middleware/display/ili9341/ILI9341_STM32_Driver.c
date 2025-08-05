@@ -81,7 +81,7 @@
 //-----------------------------------
 
 /* Includes ------------------------------------------------------------------*/
-#include "ILI9341_STM32_Driver.h"
+#include "ili9341/ILI9341_STM32_Driver.h"
 #include "stm32f4xx_hal_spi.h"
 //#include "spi.h"
 //#include "gpio.h"
@@ -515,4 +515,32 @@ void ILI9341_Draw_Vertical_Line(uint16_t X, uint16_t Y, uint16_t Height, uint16_
     ILI9341_Set_Address(X, Y, X, Y+Height-1);
     ILI9341_Draw_Colour_Burst(Colour, Height);
 }
+
+//DRAW LINE FROM X,Y LOCATION to X+Width,Y LOCATION
+void ILI9341_Draw_Horizontal_Line_Thickness(uint16_t X, uint16_t Y, uint16_t Width, uint16_t Colour, uint8_t tick)
+{
+    if ((X >= LCD_WIDTH) || (Y >= LCD_HEIGHT)) return;
+    if ((X + Width - 1) >= LCD_WIDTH)
+    {
+        Width = LCD_WIDTH - X;
+    }
+    Width *= tick;
+    ILI9341_Set_Address(X, Y, X + Width - 1, Y + tick);
+    ILI9341_Draw_Colour_Burst(Colour, Width);
+}
+
+//DRAW LINE FROM X,Y LOCATION to X,Y+Height LOCATION
+void ILI9341_Draw_Vertical_Line_Thickness(uint16_t X, uint16_t Y, uint16_t Height, uint16_t Colour, uint8_t tick)
+{
+    if ((X >= LCD_WIDTH) || (Y >= LCD_HEIGHT)) return;
+    if ((Y + Height - 1) >= LCD_HEIGHT)
+    {
+        Height = LCD_HEIGHT - Y;
+    }
+    Height *= tick;
+    ILI9341_Set_Address(X, Y, X + tick, Y + Height - 1);
+    ILI9341_Draw_Colour_Burst(Colour, Height);
+}
+
+
 

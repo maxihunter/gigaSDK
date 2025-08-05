@@ -24,5 +24,3 @@ endif
 C_INCLUDES += \
 -ICore/Inc \
 
-include middleware/resource.mk
-

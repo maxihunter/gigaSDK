@@ -13,45 +13,40 @@
 # C sources
 ifeq ($(PLATFORM), STM32F4)
 C_SOURCES +=  \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_sdmmc.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sd.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c \
-driver/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c \
-#Core/Src/system_stm32f4xx.c \
-#Core/Src/stm32f4xx_it.c \
-#Core/Src/stm32f4xx_hal_msp.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_sdmmc.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sd.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2s.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2s_ex.c
 
 # ASM sources
 ASM_SOURCES +=  \
-startup_stm32f401xc.s
 
 # AS includes
 AS_INCLUDES = 
 
 # C includes
 C_INCLUDES +=  \
--ICore/Inc \
--Iili9341 \
--Idriver/STM32F4xx_HAL_Driver/Inc \
--Idriver/STM32F4xx_HAL_Driver/Inc/Legacy \
--Idriver/CMSIS/Device/ST/STM32F4xx/Include \
--Idriver/CMSIS/Include
+-I$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Inc \
+-I$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Inc/Legacy \
+-I$(DRIVER_DIR)/CMSIS/Device/ST/STM32F4xx/Include \
+-I$(DRIVER_DIR)/CMSIS/Include
 
-# LDFLAGS
-LDSCRIPT += STM32F401VCTx_FLASH.ld
 endif
 

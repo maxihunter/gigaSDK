@@ -42,8 +42,8 @@
  *             overlap-add, frequency inversion
  **************************************************************************************/
 
-#include "coder.h"
-#include "assembly.h"
+#include "mp3/coder.h"
+#include "mp3/assembly.h"
 
 /**************************************************************************************
  * Function:    AntiAlias

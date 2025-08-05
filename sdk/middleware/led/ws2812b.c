@@ -15,7 +15,7 @@
 #include <string.h>
 
 #include "stm32f4xx_hal.h"
-#include "ws2812b.h"
+#include "led/ws2812b.h"
 
 extern WS2812_Struct ws2812b;
 
