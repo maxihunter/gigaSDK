@@ -81,7 +81,7 @@
 //-----------------------------------
 
 /* Includes ------------------------------------------------------------------*/
-#include "ILI9341_STM32_Driver.h"
+#include "ili9341/ILI9341_STM32_Driver.h"
 #include "stm32f4xx_hal_spi.h"
 //#include "spi.h"
 //#include "gpio.h"

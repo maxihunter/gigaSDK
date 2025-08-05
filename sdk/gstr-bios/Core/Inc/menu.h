@@ -31,6 +31,8 @@ extern "C" {
 #include "stm32f4xx_hal.h"
 
 void mainMenu_Handler(void);
+void mainMenu_TriggerUp(void);
+void mainMenu_TriggerDown(void);
 
 #ifdef __cplusplus
 }

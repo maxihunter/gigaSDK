@@ -28,6 +28,7 @@
 #include "bootup.h"
 #include "string.h"
 #include <stdio.h>
+#include "snow_tiger.h"
 
 /* USER CODE END Includes */
 
@@ -126,7 +127,7 @@ int main(void)
   while (1)
   {
     HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-    mainMenu_Handler(void);
+    mainMenu_Handler();
     if (sd_error == 0) {
        /* snprintf(buff, 64, "BS:%lu", hsd.SdCard.BlockSize);
         ILI9341_Draw_Text(buff, 0, 15, WHITE, 2, BLACK);
@@ -150,11 +151,9 @@ int main(void)
     } else {
         ILI9341_Draw_Text("SD CARD ERROR", 0, 220, WHITE, 2, BLACK);
     }
-    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
     HAL_Delay(4000);
     HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
 
-    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -327,13 +326,14 @@ static void MX_GPIO_Init(void)
 static void ILI9341_Draw_Splash(void) {
   ILI9341_Fill_Screen(WHITE);
   
-  ILI9341_Draw_Image(bootup_logo, 3);
-  char buff[20] = {0};  
+  ILI9341_Draw_SmallImage(bootup_logo, 20, 70, 304, 114);
+  char buff[20] = {0};
   snprintf(buff, 20, "Bios version: %s", BIOS_VERSION);
-  ILI9341_Draw_Text(buff, 30, 150, BLACK, 2, WHITE);  
+  ILI9341_Draw_Text(buff, 118, 210, BLACK, 1, WHITE);   // 17 * 5 = 85 ; 160 - 42
 }
 
 static void ILI9341_FPS_Test(void) {
+  char buff[20] = {0};
   uint32_t tickstart = HAL_GetTick();
   ILI9341_Fill_Screen(BLUE);
   ILI9341_Fill_Screen(GREEN);

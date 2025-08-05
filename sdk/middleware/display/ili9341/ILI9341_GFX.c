@@ -45,9 +45,9 @@
 //-----------------------------------
 
 
-#include "ILI9341_STM32_Driver.h"
-#include "ILI9341_GFX.h"
-#include "5x5_font.h"
+#include "ili9341/ILI9341_STM32_Driver.h"
+#include "ili9341/ILI9341_GFX.h"
+#include "ili9341/5x5_font.h"
 #include "stm32f4xx_hal_spi.h"
 //#include "spi.h"
 
@@ -352,7 +352,7 @@ void ILI9341_Draw_Image(const char* Image_Array, uint8_t Orientation)
 		{			
 				for(uint32_t k = 0; k< BURST_MAX_SIZE; k++)
 				{
-					Temp_small_buffer[k]	= Image_Array[counter+k];		
+					Temp_small_buffer[k]	= Image_Array[counter+k];
 				}						
 				HAL_SPI_Transmit(HSPI_INSTANCE, (unsigned char*)Temp_small_buffer, BURST_MAX_SIZE, 10);	
 				counter += BURST_MAX_SIZE;			
@@ -361,4 +361,24 @@ void ILI9341_Draw_Image(const char* Image_Array, uint8_t Orientation)
 	}
 }
 
+void ILI9341_Draw_SmallImage(const char* Image_Array, uint16_t X1, uint16_t Y1, uint16_t X2, uint16_t Y2)
+{
+    ILI9341_Set_Address(X1,Y1,X2,Y2);
+
+    HAL_GPIO_WritePin(LCD_DC_PORT, LCD_DC_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
+
+    unsigned char Temp_small_buffer[BURST_MAX_SIZE];
+    uint32_t counter = 0;
+    for(uint32_t i = 0; i < (X2-X1)*(Y2-Y1)*2/BURST_MAX_SIZE; i++)
+    {
+            for(uint32_t k = 0; k< BURST_MAX_SIZE; k++)
+            {
+                Temp_small_buffer[k]	= Image_Array[counter+k];		
+            }
+            HAL_SPI_Transmit(HSPI_INSTANCE, (unsigned char*)Temp_small_buffer, BURST_MAX_SIZE, 10);	
+            counter += BURST_MAX_SIZE;			
+    }
+    HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
+}
 

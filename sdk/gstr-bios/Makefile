@@ -72,6 +72,7 @@ Core/Src/sysmem.c \
 Core/Src/syscalls.c \
 $(MIDDLEWARE)/display/ili9341/ILI9341_STM32_Driver.c \
 $(MIDDLEWARE)/display/ili9341/ILI9341_GFX.c \
+Core/Src/menu.c \
 
 # ASM sources
 ASM_SOURCES =  \

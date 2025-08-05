@@ -28,9 +28,6 @@
 #include "ili9341/ILI9341_GFX.h"
 #include "string.h"
 
-extern SPI_HandleTypeDef hspi2;
-unsigned int sd_error = 0;
-
 static const uint8_t menu_count = 5;
 static uint8_t item_selected = 0;
 static const char menu_items[][16] = { "Run", "Network", "Storage", "Settings", "Test" };
@@ -39,15 +36,31 @@ static const char menu_items[][16] = { "Run", "Network", "Storage", "Settings", 
   * @brief  The application entry point.
   * @retval int
   */
-int mainMenu_Handler(void)
+void mainMenu_Handler(void)
 {
     ILI9341_Draw_Filled_Rectangle_Coord(20, 20, 300, 220, DARKGREY);
     for (uint8_t i = 0; i < menu_count; i++) {
         if (item_selected == i) {
-            ILI9341_Draw_Filled_Rectangle_Coord(20+(i*15), 20, 300, 20 + ((i+1) * 15), DARKYELLOW);
-            ILI9341_Draw_Text(buff, 20, 20 + (i * 15), WHITE, 2, DARKYELLOW);
+            ILI9341_Draw_Filled_Rectangle_Coord(20+(i*15), 20, 300, 20 + ((i+1) * 15), YELLOW);
+            ILI9341_Draw_Text(menu_items[i], 20, 20 + (i * 15), BLACK, 2, YELLOW);
         } else {
-            ILI9341_Draw_Text(buff, 20, 20 + (i * 15), WHITE, 2, BLACK);
+            ILI9341_Draw_Text(menu_items[i], 20, 20 + (i * 15), WHITE, 2, DARKGREY);
         }
     }
 }
+
+
+void mainMenu_TriggerUp() {
+    item_selected++;
+    if (item_selected >= menu_count) {
+        item_selected = 0;
+    }
+}
+
+void mainMenu_TriggerDown() {
+    item_selected--;
+    if (item_selected < 0) {
+        item_selected = 4;
+    }
+}
+
