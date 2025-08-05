@@ -143,7 +143,7 @@ C_INCLUDES =  \
 -IMiddlewares/Third_Party/FatFs/src \
 -I$(DRIVER_DIR)/CMSIS/Device/ST/STM32F4xx/Include \
 -I$(DRIVER_DIR)/CMSIS/Include \
--I$(MIDDLEWARE)/include/ili9341/ \
+-I$(MIDDLEWARE)/include/
 
 
 # compile gcc flags

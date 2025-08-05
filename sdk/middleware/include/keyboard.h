@@ -21,6 +21,9 @@
  * THE SOFTWARE.
  */
 
+#ifndef __KEYBOARD__
+#define __KEYBOARD__
+
 #include "stm32f4xx_hal.h"
 
 /*
@@ -58,3 +61,5 @@
  *			0 is released. 
  */
 uint32_t getKeyState();
+
+#endif // __KEYBOARD__

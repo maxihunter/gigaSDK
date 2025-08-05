@@ -22,8 +22,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "ILI9341_STM32_Driver.h"
-#include "ILI9341_GFX.h"
+#include "ili9341/ILI9341_STM32_Driver.h"
+#include "ili9341/ILI9341_GFX.h"
+#include "menu.h"
 #include "bootup.h"
 #include "string.h"
 #include <stdio.h>
@@ -60,7 +61,8 @@ static void MX_GPIO_Init(void);
 static void MX_SDIO_SD_Init(void);
 static void MX_SPI2_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void ILI9341_Draw_Splash(void);
+static void ILI9341_FPS_Test(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -104,17 +106,19 @@ int main(void)
   HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
   //HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
   ILI9341_Init();
+  ILI9341_Draw_Splash();
+
   FATFS fs;
   FRESULT res;
   res = f_mount(&fs, SDPath, 1);
   if (res != FR_OK) {
-      sd_error = 1;
+    ILI9341_Draw_Text("SD Card not found", 0, 220, RED, 80, BLACK);
+    sd_error = 1;
+	HAL_Delay(2000);
   }
   DIR dir;
   FILINFO fno;
-
-  ILI9341_Draw_Image(bootup_logo, 3);
-  HAL_Delay(14000);
+  HAL_Delay(12000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -122,10 +126,9 @@ int main(void)
   while (1)
   {
     HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-    char buff[64] = {0};
-    ILI9341_Draw_Text("SD INFO: ", 0, 0, WHITE, 2, BLACK);
+    mainMenu_Handler(void);
     if (sd_error == 0) {
-        snprintf(buff, 64, "BS:%lu", hsd.SdCard.BlockSize);
+       /* snprintf(buff, 64, "BS:%lu", hsd.SdCard.BlockSize);
         ILI9341_Draw_Text(buff, 0, 15, WHITE, 2, BLACK);
         snprintf(buff, 64, "Bnbr:%lu", hsd.SdCard.BlockNbr);
         ILI9341_Draw_Text(buff, 0, 30, WHITE, 2, BLACK);
@@ -143,48 +146,14 @@ int main(void)
                 delta++;
             }
         } while (fno.fname[0] != 0);
-        f_closedir(&dir);
+        f_closedir(&dir);*/
     } else {
-        ILI9341_Draw_Text("SD CARD ERROR", 0, 15, WHITE, 2, BLACK);
-        snprintf(buff, 64, "ERR:%lu", hsd.ErrorCode);
-        ILI9341_Draw_Text(buff, 10, 30, WHITE, 2, BLACK);
+        ILI9341_Draw_Text("SD CARD ERROR", 0, 220, WHITE, 2, BLACK);
     }
     HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
     HAL_Delay(4000);
     HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-    uint32_t tickstart = HAL_GetTick();
-    ILI9341_Fill_Screen(BLUE);
-    ILI9341_Fill_Screen(GREEN);
-    ILI9341_Fill_Screen(PINK);
-    ILI9341_Fill_Screen(OLIVE);
-    ILI9341_Fill_Screen(NAVY);
-    ILI9341_Fill_Screen(PURPLE);
-    ILI9341_Fill_Screen(MAROON);
-    ILI9341_Fill_Screen(LIGHTGREY);
-    ILI9341_Fill_Screen(CYAN);
-    ILI9341_Fill_Screen(MAGENTA);
-    ILI9341_Fill_Screen(YELLOW);
-    ILI9341_Fill_Screen(ORANGE);
-    ILI9341_Fill_Screen(GREENYELLOW);
-    ILI9341_Fill_Screen(WHITE);
-    ILI9341_Fill_Screen(BLUE);
-    ILI9341_Fill_Screen(GREEN);
-    ILI9341_Fill_Screen(PINK);
-    ILI9341_Fill_Screen(OLIVE);
-    ILI9341_Fill_Screen(NAVY);
-    ILI9341_Fill_Screen(PURPLE);
-    ILI9341_Fill_Screen(MAROON);
-    ILI9341_Fill_Screen(LIGHTGREY);
-    ILI9341_Fill_Screen(CYAN);
-    ILI9341_Fill_Screen(MAGENTA);
-    ILI9341_Fill_Screen(YELLOW);
-    ILI9341_Fill_Screen(ORANGE);
-    uint32_t secs = (HAL_GetTick() - tickstart);
-    if (secs <= 0) secs = 1;
-    uint32_t frate = 25000 / (secs);
-    ILI9341_Fill_Screen(BLACK);
-    snprintf(buff, 24, "FPS:%lu(%lu)", frate,secs);
-    ILI9341_Draw_Text(buff, 150, 0, WHITE, 2, BLACK);
+
     HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
     /* USER CODE END WHILE */
 
@@ -354,6 +323,51 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+static void ILI9341_Draw_Splash(void) {
+  ILI9341_Fill_Screen(WHITE);
+  
+  ILI9341_Draw_Image(bootup_logo, 3);
+  char buff[20] = {0};  
+  snprintf(buff, 20, "Bios version: %s", BIOS_VERSION);
+  ILI9341_Draw_Text(buff, 30, 150, BLACK, 2, WHITE);  
+}
+
+static void ILI9341_FPS_Test(void) {
+  uint32_t tickstart = HAL_GetTick();
+  ILI9341_Fill_Screen(BLUE);
+  ILI9341_Fill_Screen(GREEN);
+  ILI9341_Fill_Screen(PINK);
+  ILI9341_Fill_Screen(OLIVE);
+  ILI9341_Fill_Screen(NAVY);
+  ILI9341_Fill_Screen(PURPLE);
+  ILI9341_Fill_Screen(MAROON);
+  ILI9341_Fill_Screen(LIGHTGREY);
+  ILI9341_Fill_Screen(CYAN);
+  ILI9341_Fill_Screen(MAGENTA);
+  ILI9341_Fill_Screen(YELLOW);
+  ILI9341_Fill_Screen(ORANGE);
+  ILI9341_Fill_Screen(GREENYELLOW);
+  ILI9341_Fill_Screen(WHITE);
+  ILI9341_Fill_Screen(BLUE);
+  ILI9341_Fill_Screen(GREEN);
+  ILI9341_Fill_Screen(PINK);
+  ILI9341_Fill_Screen(OLIVE);
+  ILI9341_Fill_Screen(NAVY);
+  ILI9341_Fill_Screen(PURPLE);
+  ILI9341_Fill_Screen(MAROON);
+  ILI9341_Fill_Screen(LIGHTGREY);
+  ILI9341_Fill_Screen(CYAN);
+  ILI9341_Fill_Screen(MAGENTA);
+  ILI9341_Fill_Screen(YELLOW);
+  ILI9341_Fill_Screen(ORANGE);
+  uint32_t secs = (HAL_GetTick() - tickstart);
+  if (secs <= 0) secs = 1;
+  uint32_t frate = 25000 / (secs);
+  ILI9341_Fill_Screen(BLACK);
+  snprintf(buff, 24, "FPS:%lu(%lu)", frate,secs);
+  ILI9341_Draw_Text(buff, 150, 0, WHITE, 1, BLACK);
+}
 
 /* USER CODE END 4 */
 

@@ -46,7 +46,7 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+#define BIOS_VERSION "0.1"
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
