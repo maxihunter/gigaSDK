@@ -22,13 +22,14 @@
  */
 
 #include <keyboard.h>
+#include "stm32f4xx_hal.h"
 
 /**
 	@brief Description of keys
 	@details Structure describes exact port and pin with connected buttons
 */
 struct key_info {
-	uint8_t port; ///< Port number of the key
+	GPIO_TypeDef *port; ///< Port number of the key
 	uint16_t pin; ///< Pin number of the key
 };
 
@@ -44,13 +45,13 @@ const struct key_info key_map[] = {
 	{GPIOB, GPIO_PIN_7},
 	{GPIOB, GPIO_PIN_8},
 	{GPIOB, GPIO_PIN_9},
-	{GPIOD, GPIO_PIN_7},
-}
+	{GPIOB, GPIO_PIN_9},
+};
 
 uint32_t getKeyState() {
 	uint32_t keymap = 0;
 	for (uint8_t i = 0; i < KEY_MAP_SIZE; i++) {
-		if (HAL_GPIO_ReadPin(key_map.port, key_map.pin)) {
+		if (HAL_GPIO_ReadPin(key_map[i].port, key_map[i].pin) == GPIO_PIN_RESET) {
 			keymap |= 1 << i;
 		}
 	}

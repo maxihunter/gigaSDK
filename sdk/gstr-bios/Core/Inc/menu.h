@@ -33,6 +33,7 @@ extern "C" {
 void mainMenu_Handler(void);
 void mainMenu_TriggerUp(void);
 void mainMenu_TriggerDown(void);
+uint8_t mainMenu_GetSelectedId(void);
 
 #ifdef __cplusplus
 }

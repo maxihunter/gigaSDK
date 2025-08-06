@@ -24,6 +24,7 @@ else
 endif
 
 C_SOURCES +=  \
+$(MIDDLEWARE_PATH)/keyboard/keyboard.c  \
 $(MIDDLEWARE_PATH)/decoder/mp3/bitstream.c  \
 $(MIDDLEWARE_PATH)/decoder/mp3/buffers.c \
 $(MIDDLEWARE_PATH)/decoder/mp3/dct32.c  \

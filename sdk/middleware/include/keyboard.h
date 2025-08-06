@@ -43,9 +43,9 @@
 */
 
 #define KBRD_BTN_UP      (1 << 0)
-#define KBRD_BTN_RIGHT   (1 << 1)
+#define KBRD_BTN_DOWN    (1 << 1)
 #define KBRD_BTN_LEFT    (1 << 2)
-#define KBRD_BTN_DOWN    (1 << 3)
+#define KBRD_BTN_RIGHT   (1 << 3)
 #define KBRD_BTN_1       (1 << 4)
 #define KBRD_BTN_2       (1 << 5)
 #define KBRD_BTN_3       (1 << 6)

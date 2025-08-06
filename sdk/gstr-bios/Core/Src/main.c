@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "ili9341/ILI9341_STM32_Driver.h"
 #include "ili9341/ILI9341_GFX.h"
+#include "keyboard.h"
 #include "menu.h"
 #include "bootup.h"
 #include "string.h"
@@ -112,45 +113,35 @@ int main(void)
   FRESULT res;
   res = f_mount(&fs, SDPath, 1);
   if (res != FR_OK) {
-    ILI9341_Draw_Text("SD Card not found", 0, 220, RED, 80, BLACK);
+    ILI9341_Draw_Text("SD Card not found", 60, 220, RED, 2, BLACK);
     sd_error = 1;
 	HAL_Delay(2000);
   }
-  DIR dir;
-  FILINFO fno;
-  HAL_Delay(12000);
+  //DIR dir;
+  //FILINFO fno;
+  HAL_Delay(2000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  mainMenu_Handler();
   while (1)
   {
     HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-    mainMenu_Handler();
-    if (sd_error == 0) {
-       /* snprintf(buff, 64, "BS:%lu", hsd.SdCard.BlockSize);
-        ILI9341_Draw_Text(buff, 0, 15, WHITE, 2, BLACK);
-        snprintf(buff, 64, "Bnbr:%lu", hsd.SdCard.BlockNbr);
-        ILI9341_Draw_Text(buff, 0, 30, WHITE, 2, BLACK);
-        snprintf(buff, 64, "CS:%lu", hsd.SdCard.BlockSize * hsd.SdCard.BlockNbr / 1000);
-        ILI9341_Draw_Text(buff, 0, 45, WHITE, 2, BLACK);
-        snprintf(buff, 64, "VER:%lu", hsd.SdCard.CardVersion);
-        ILI9341_Draw_Text(buff, 0, 60, WHITE, 2, BLACK);
-        unsigned int delta = 0;
-        f_opendir(&dir, "/");
-        do {
-            f_readdir(&dir, &fno);
-            if (fno.fname[0] != 0) {
-                snprintf(buff, 64, "%d: %s", delta+1, fno.fname);
-                ILI9341_Draw_Text(buff, 10, 75+(delta*15), WHITE, 2, BLACK);
-                delta++;
-            }
-        } while (fno.fname[0] != 0);
-        f_closedir(&dir);*/
-    } else {
-        ILI9341_Draw_Text("SD CARD ERROR", 0, 220, WHITE, 2, BLACK);
+    uint32_t keymap =  getKeyState();
+    if (keymap) {
+        if (keymap & KBRD_BTN_UP) {
+            mainMenu_TriggerUp();
+        } else
+        if (keymap & KBRD_BTN_DOWN) {
+            mainMenu_TriggerDown();
+        } else
+        if (keymap & KBRD_BTN_1) {
+            uint8_t item = mainMenu_GetSelectedId() + 1;
+        }
+        mainMenu_Handler();
     }
-    HAL_Delay(4000);
+    HAL_Delay(100);
     HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
 
     /* USER CODE END WHILE */
@@ -337,6 +328,32 @@ static void ILI9341_Draw_Splash(void) {
   char buff[20] = {0};
   snprintf(buff, 20, "Bios version: %s", BIOS_VERSION);
   ILI9341_Draw_Text(buff, 118, 210, BLACK, 1, WHITE);   // 17 * 5 = 85 ; 160 - 42
+}
+
+static void SD_Card_Print_info(void) {
+    if (sd_error == 0) {
+       /* snprintf(buff, 64, "BS:%lu", hsd.SdCard.BlockSize);
+        ILI9341_Draw_Text(buff, 0, 15, WHITE, 2, BLACK);
+        snprintf(buff, 64, "Bnbr:%lu", hsd.SdCard.BlockNbr);
+        ILI9341_Draw_Text(buff, 0, 30, WHITE, 2, BLACK);
+        snprintf(buff, 64, "CS:%lu", hsd.SdCard.BlockSize * hsd.SdCard.BlockNbr / 1000);
+        ILI9341_Draw_Text(buff, 0, 45, WHITE, 2, BLACK);
+        snprintf(buff, 64, "VER:%lu", hsd.SdCard.CardVersion);
+        ILI9341_Draw_Text(buff, 0, 60, WHITE, 2, BLACK);
+        unsigned int delta = 0;
+        f_opendir(&dir, "/");
+        do {
+            f_readdir(&dir, &fno);
+            if (fno.fname[0] != 0) {
+                snprintf(buff, 64, "%d: %s", delta+1, fno.fname);
+                ILI9341_Draw_Text(buff, 10, 75+(delta*15), WHITE, 2, BLACK);
+                delta++;
+            }
+        } while (fno.fname[0] != 0);
+        f_closedir(&dir);*/
+    } else {
+        ILI9341_Draw_Text("SD CARD ERROR", 0, 220, WHITE, 2, BLACK);
+    }
 }
 
 static void ILI9341_FPS_Test(void) {
