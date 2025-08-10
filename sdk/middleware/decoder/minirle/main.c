@@ -41,10 +41,10 @@ void main() {
     size_t comp_size = 0;
     size_t header_size = 0;
 
-    // Compress the input string via LZW algorithm,
+    // Compress the input string via RLE algorithm,
     // then pass the output to th `compressed`
     // variable.
-    minirle_compress(input, strlen(input), compressed, &comp_size, head, &header_size);
+    minirle_compress(input, strlen(input), compressed, &comp_size, head);
 
     printf("Compressed(%d/%d): \n", strlen(input)/*sizeof(bootup1)*/, comp_size );
     // Iterate to print all the compression output
@@ -59,6 +59,7 @@ void main() {
     }
     printf("\n");
     char data[8096] = {0};
+    header_size = *head;
     //*((unsigned int *)data) = header_size;
     memcpy((unsigned int*)data, head, 4096);
     memcpy((unsigned int*)data+header_size+1, compressed, 4096);
