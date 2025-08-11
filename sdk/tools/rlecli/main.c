@@ -28,11 +28,14 @@
 #include <string.h>
 #include <errno.h>
 
+//#define DEGUB
+
 static void print_help(char * name) {
     printf("%s - tool to compress data by RLE algorithm\n", name);
     printf("Usage:\n");
     printf("%s <type> <input> <output>\n", name);
-    printf("\t <type> - \"s8\" or \"s16\"\n");
+    printf("\t <type> - \"b8\" or \"b16\" or \"p8\" or \"p16\"\n");
+    printf("\t\t Where: b - is a binary format, p - printable format\n");
     printf("\t <input> - input file name\n");
     printf("\t <output> - output file name\n");
 }
@@ -44,11 +47,15 @@ void main(int argc, char ** argv) {
         print_help(argv[0]);
         return;
     }
+    if ( strcmp(argv[1], "b8") != 0 &&
+         strcmp(argv[1], "b16") != 0 &&
+         strcmp(argv[1], "p8") != 0 &&
+         strcmp(argv[1], "p16") != 0 ) {
+        printf("Error: Invalid data type\n");
+        return;
+    }
     const char *input = argv[2];
     const char *output = argv[3];
-    printf("input: %s\n", input);
-    // Declare compression dictionary size
-    // and buffer size.
 
     FILE *fp = fopen(input, "r");
     if (fp == NULL) {
@@ -68,41 +75,30 @@ void main(int argc, char ** argv) {
     fread(in_data, 1, size, fp);
     fclose(fp);
 
+#ifdef DEBUG
     printf("data = %s\n", in_data);
+#endif
     char compressed[65535] = {0};
     char head[4096] = {0};
     size_t comp_size = 0;
-    size_t header_size = 0;
     printf("Input data size = %d\n", size);
 
     // Compress the input string via RLE algorithm,
     // then pass the output to th `compressed`
     // variable.
-    if ( strcmp(argv[1], "s8") == 0 )
+    if ( strcmp(argv[1]+1, "8") == 0 )
         minirle_compress(in_data, size, compressed, &comp_size, head);
     else
         minirle_compress16(in_data, size, compressed, &comp_size, head);
 
-
-    // Iterate to print all the compression output
-    // integer values.
-    /*for(unsigned int i = 0; i < comp_size; ++i) {
-        printf("[0x%02X]", compressed[i]);
-//        printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
-//        printf("i=%d, div10=%d \n", i, i % 10);
-        if ( i % 10 == 0 && i != 0 ) {
-            printf("\n");\
-        }
-    }*/
-    printf("\n");
-    header_size = *head;
-    char * data = (char *) malloc (sizeof(char) * (size+(header_size*4)));
+    size_t header_size = *head;
+    unsigned char * data = (char *) malloc (sizeof(char) * (size+(header_size*4)));
     if (data == NULL) {
         printf("Memory allocation failed: %s\n", strerror(errno));
         return;
     }
     printf("Compressed(%d/%d) Headersize(%u): \n", size, comp_size, header_size);
-    //*((unsigned int *)data) = header_size;
+
     char * decomp = (char *) malloc(size * sizeof(char));
     memset(decomp, 0, size * sizeof(char));
     memcpy((unsigned int*)data, head, 4096);
@@ -113,17 +109,24 @@ void main(int argc, char ** argv) {
         printf("File open failed: %s\n", strerror(errno));
         return;
     }
-    fwrite(data, 1, comp_size+(header_size*4), fp);
-    fclose(fp);
-    for(unsigned int i = 0; i < (header_size*4) + comp_size; ++i) {
-        printf("[0x%02X]", data[i]);
-        //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
-        if ( i % 16 == 0 && i != 0 ) {
-            printf("\n%d: ", i / 16);
+    if ( *(argv[1]) == 'b') {
+        fwrite(data, 1, comp_size+(header_size*4), fp);
+    } else {
+        char buff[256] = {0};
+        for(unsigned int i = 0; i < (header_size*4) + comp_size; i++) {
+            sprintf(buff, "%s0x%02X, ", buff, data[i]);
+            //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
+            if ( (i + 1) % 16 == 0 && i != 0 ) {
+                fputs(buff, fp);
+                fputc('\n', fp);
+                buff[0] = '\0';
+            }
         }
     }
-    printf("\n");\
+    fclose(fp);
+#ifdef DEBUG
     printf("comp: %s\n", compressed);
+#endif
     // Decompress the compressed output
     // then pass the decompressed string
     // to the variable `decompressed`.
@@ -132,18 +135,20 @@ void main(int argc, char ** argv) {
         return;
     }
     memset(decomp, 0, size * sizeof(char));
-    if ( strcmp(argv[1], "s8") == 0 )
+    if ( strcmp(argv[1]+1, "8") == 0 )
         minirle_decompress(data, comp_size, decomp);
     else
         minirle_decompress16(data, comp_size, decomp);
 
     for (unsigned int i = 0; i < size; i++) {
         if (*(in_data+i) != *(decomp+i)) {
-            printf("Data verification failed! (index=%d, val1,val2 [0x%02X,0x%02X])\n", i, *(in_data+i), *(decomp+i));
+            printf("Data verification failed! (index=%d, val1!=,val2 [0x%02X,0x%02X])\n", i, *(in_data+i), *(decomp+i));
             break;
         }
     }
+#ifdef DEBUG
     printf("Decompressed: %s\n", decomp);
+#endif
     free(decomp);
     free(data);
     free(in_data);
