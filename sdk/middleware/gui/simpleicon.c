@@ -23,6 +23,7 @@
 
 #include <gui/simpleicon.h>
 #include <string.h>
+#include <gui/bmpicon.h>
 
 static void drawBoxBg(struct gigaGuiSimpleIcon* si, uint16_t color) {
 	uint8_t border = 0;
@@ -112,4 +113,57 @@ uint8_t gigaGuiSimpleIconAnimate(struct gigaGuiSimpleIcon* si, uint8_t type) {
 	anim_frames--;
 	return anim_frames;*/
 	return 0;
+}
+
+#define BATTERY_ICON_BY_LINES
+void gigaGuiSimpleBatteryIcon(struct gigaGuiBatteryIcon* bi, uint8_t power) {
+	int max_power = power > 5 ? 5 : power;
+#ifdef BATTERY_ICON_BY_LINES
+	// originally take 7x14 dots icon
+	if (bi->orientation) {
+		// edge to the right
+		// top line
+		ILI9341_Draw_Horizontal_Line_Thickness(bi->pos_x + bi->size, bi->pos_y, (BATTEY_ICON_WIDTH - bi->size) * bi->size, bi->symbol_color, bi->size);
+		// bottom line
+		ILI9341_Draw_Horizontal_Line_Thickness(bi->pos_x + bi->size, bi->pos_y + (bi->size * BATTEY_ICON_HEIGHT), (BATTEY_ICON_WIDTH - bi->size) * bi->size, bi->symbol_color, bi->size);
+		// battery side left
+		ILI9341_Draw_Vertical_Line(bi->pos_x + bi->size, bi->pos_y, bi->size * (BATTEY_ICON_HEIGHT), bi->symbol_color, bi->size);
+		// battery side right
+		ILI9341_Draw_Vertical_Line(bi->pos_x + ((BATTEY_ICON_WIDTH - bi->size) * bi->size), bi->pos_y, bi->size * BATTEY_ICON_HEIGHT, bi->symbol_color, bi->size);
+		// battery edge
+		ILI9341_Draw_Vertical_Line(bi->pos_x, bi->pos_y + (bi->size * 3), bi->size * (BATTEY_ICON_EDGE), bi->symbol_color, bi->size);
+		// battery's lines
+		for (int j = 0; j < max_power; j++) {
+			ILI9341_Draw_Vertical_Line((2 * j * bi->size) + bi->pos_x + (4 * bi->size), bi->pos_y + (bi->size * 3), bi->size * BATTEY_ICON_EDGE, bi->symbol_color, bi->size);
+		}
+	} else {
+		// edge to the left
+		// top line
+		ILI9341_Draw_Horizontal_Line_Thickness(bi->pos_x, bi->pos_y, (BATTEY_ICON_WIDTH - bi->size) * bi->size, bi->symbol_color, bi->size);
+		// bottom line
+		ILI9341_Draw_Horizontal_Line_Thickness(bi->pos_x, bi->pos_y + (bi->size * BATTEY_ICON_HEIGHT), (BATTEY_ICON_WIDTH - bi->size) * bi->size, bi->symbol_color, bi->size);
+		// battery side left
+		ILI9341_Draw_Vertical_Line(bi->pos_x, bi->pos_y, bi->size * (BATTEY_ICON_HEIGHT), bi->symbol_color, bi->size);
+		// battery side right
+		ILI9341_Draw_Vertical_Line(bi->pos_x + ((BATTEY_ICON_WIDTH - bi->size) * bi->size), bi->pos_y, bi->size * BATTEY_ICON_HEIGHT, bi->symbol_color, bi->size);
+		// battery edge
+		ILI9341_Draw_Vertical_Line(bi->pos_x + (BATTEY_ICON_WIDTH * bi->size), bi->pos_y + (bi->size * 3), bi->size * (BATTEY_ICON_EDGE), bi->symbol_color, bi->size);
+		// battery's lines
+		for (int j = max_power - 1; j > - 1; j--) {
+			uint16_t right_s = bi->pos_x + (BATTEY_ICON_WIDTH * bi->size) - (4 * bi->size);
+			ILI9341_Draw_Vertical_Line(right_s - (2 * j * bi->size), bi->pos_y + (bi->size * 3), bi->size * BATTEY_ICON_EDGE, bi->symbol_color, bi->size);
+		}
+	}
+#else
+	char new_arr[sizeof(giga_battery_icon_7x14) * bi->size];
+	for (int i = 0; i < sizeof(giga_battery_icon_7x14); i++) {
+		for (int j = 0; j < bi->size; j++) {
+			new_arr[j + (i * bi->size)] = giga_battery_icon_7x14[i];
+		}
+	}
+	for (int j = max_power - 1; j > -1; j--) {
+		uint16_t right_s = bi->pos_x + (BATTEY_ICON_WIDTH * bi->size) - (4 * bi->size);
+		ILI9341_Draw_Vertical_Line(right_s - (2 * j * bi->size), bi->pos_y + (bi->size * 3), bi->size * BATTEY_ICON_EDGE, bi->symbol_color, bi->size);
+	}
+#endif
 }

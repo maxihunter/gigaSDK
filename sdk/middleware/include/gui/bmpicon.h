@@ -21,46 +21,36 @@
  * THE SOFTWARE.
  */
 
-#ifndef __GUI_SIMPLE_ICON__
-#define __GUI_SIMPLE_ICON__
+#ifndef __GUI_BMP_ICON__
+#define __GUI_BMP_ICON__
 
-#include "ili9341/ILI9341_STM32_Driver.h"
-#include "ili9341/ILI9341_GFX.h"
+ /** @brief Empty battery BMP
+  *  @note do not compress this bmp because since it's very small result size of this bmp will be 
+  *			larger that original image
+ */
 
-#define TYPE_CIRCLE 1
-#define TYPE_RECTANGLE 2
-#define TYPE_TRIANGLE 3
-
-struct gigaGuiSimpleIcon {
+struct gigaGuiBatteryIcon {
 	uint16_t pos_x;
 	uint16_t pos_y;
-	uint16_t pos_x_end;
-	uint16_t pos_y_end;
+	uint8_t size;
+	uint8_t orientation;  ///< Battery orientation. 0 - to the right, 1 - to the left
 	uint16_t symbol_color; // TODO make a struct for some variation like gradient, etc;
-	uint8_t symbol;
 	uint16_t bg_color;
-	uint8_t border;
-	uint16_t border_color;
-	uint8_t border_thikness;
 };
 
+#define BATTEY_ICON_WIDTH 14
+#define BATTEY_ICON_HEIGHT 7
+#define BATTEY_ICON_EDGE  (BATTEY_ICON_HEIGHT - 4)
 
- /** @brief Fuction to draw button on the screen
-  *  @param struct gigaGuiProgressBar to draw
-  *  @see gigaGuiButton
- */
-void gigaGuiDrawCircleIcon(struct gigaGuiSimpleIcon *si);
+const uint8_t PROGMEM giga_battery_icon_7x14[] = {
+	//        1   2     3     4     5      6     7    8     9     10    11    12    13    14
+	/*1*/	0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	/*2*/	0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+	/*3*/	0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+	/*4*/	0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+	/*5*/	0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+	/*6*/	0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+	/*7*/	0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+};
 
-/** @brief Fuction to animate button press on the screen
-  *  @param struct gigaGuiButton to draw
-  *  @see gigaGuiButton
- */
-void gigaGuiDrawSquareIcon(struct gigaGuiSimpleIcon* si);
-
-/** @brief Fuction to animate button press on the screen
-  *  @param struct gigaGuiButton to draw
-  *  @see gigaGuiButton
- */
-void gigaGuiDrawTriangleIcon(struct gigaGuiSimpleIcon* si);
-
-#endif // __GUI_SIMPLE_ICON__
+#endif // __GUI_BMP_ICON__

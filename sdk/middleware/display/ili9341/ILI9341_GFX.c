@@ -381,4 +381,53 @@ void ILI9341_Draw_SmallImage(const char* Image_Array, uint16_t X1, uint16_t Y1, 
     }
     HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
 }
+/* fade is a number between 0-100 witch defines the image bacgrount on transparency */
+void ILI9341_Draw_Image_Fader(const char* Image_Array, uint16_t X1, uint16_t Y1, uint16_t X2, uint16_t Y2, uint8_t fade, uint16_t bg)
+{
+	if (fade > 100)
+		fade = 100;
+	ILI9341_Set_Address(X1, Y1, X2, Y2);
 
+	HAL_GPIO_WritePin(LCD_DC_PORT, LCD_DC_PIN, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
+
+	unsigned char Temp_small_buffer[BURST_MAX_SIZE];
+	uint32_t counter = 0;
+	uint8_t delta_r = 0;
+	uint8_t delta_g = 0;
+	uint8_t delta_b = 0;
+	for (uint32_t i = 0; i < (X2 - X1) * (Y2 - Y1) * 2 / BURST_MAX_SIZE; i++)
+	{
+		for (uint32_t k = 0; k < BURST_MAX_SIZE; k++)
+		{
+			// image colors
+			uint8_t img_r = (Image_Array[counter + k] >> 11);
+			uint8_t img_g = ((Image_Array[counter + k] & 0x7E) >> 5);
+			uint8_t img_b = Image_Array[counter + k] & 0x1F;
+			// bg colors
+			uint8_t bg_r = (bg >> 11);
+			uint8_t bg_g = ((bg & 0x7E) >> 5);
+			uint8_t bg_b = bg & 0x1F;
+			// delta colors
+			if (bg_r > img_r)
+				delta_r = (img_r+(((bg_r-img_r)*fade)/100)) >> 11);
+			else
+				delta_r = (img_r - (((img_r - bg_r) * fade) / 100)) >> 11);
+
+			if (bg_g > img_g)
+				delta_g = (img_g + (((bg_g - img_g) * fade) / 100)) >> 11);
+			else
+				delta_g = (img_g - (((img_g - bg_g) * fade) / 100)) >> 11);
+			if (bg_r > img_r)
+				delta_b = (img_br + (((bg_b - img_b) * fade) / 100)) >> 11);
+			else
+				delta_b = (img_b - (((img_b - bg_b) * fade) / 100)) >> 11);
+			
+			uint16_t res_rgb = ((delta_r & 0xF8) << 8) | ((delta_g & 0xFC) << 3) | ((delta_b & 0x1F));
+			Temp_small_buffer[k] = res_rgb;
+		}
+		HAL_SPI_Transmit(HSPI_INSTANCE, (unsigned char*)Temp_small_buffer, BURST_MAX_SIZE, 10);
+		counter += BURST_MAX_SIZE;
+	}
+	HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
+}
