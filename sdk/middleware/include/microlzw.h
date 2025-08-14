@@ -24,6 +24,7 @@
 #ifndef MICROLZW_H
 #define MICROLZW_H
 
+#include <common.h>
 /**
  * 
  * @brief Compresses a string using the Micro Lempel-Ziv-Welch algorithm.

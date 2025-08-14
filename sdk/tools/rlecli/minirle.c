@@ -39,8 +39,8 @@ void minirle_compress(const char *input, size_t data_size, char *compressed, siz
         unsigned char curr_ch = input[idx++];
         int block = 0;
 
-        while( prev_ch == curr_ch && ch_count < 255 && idx < data_size) {
-            //printf("Encode:id:%d block(%d)(total:%d) prev[%X] curr[%X] count[%d]\n", idx, block, idx+block, prev_ch, curr_ch, ch_count);
+        while( prev_ch == curr_ch && ch_count < 255 && idx+block < data_size) {
+            printf("Encode:id:%d block(%d)(total:%d) prev[%X] curr[%X] count[%d]\n", idx, block, idx+block, prev_ch, curr_ch, ch_count);
             curr_ch = input[idx+(block++)];
             ch_count++;
         }
@@ -54,7 +54,8 @@ void minirle_compress(const char *input, size_t data_size, char *compressed, siz
         ch_count = 1;
         prev_ch = curr_ch;
     }
-    compressed[(*comp_size)++] = (1 << 8) | prev_ch;
+    compressed[(*comp_size)++] = prev_ch;
+    //compressed[(*comp_size)++] = curr_ch;
     *(((unsigned int *)header)) = h_count;
     for (int i = 0; i < h_count; i++) {
         *(((unsigned int *)header) + i + 1) = header_id[i];

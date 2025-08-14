@@ -28,9 +28,12 @@ $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sd.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2s.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2s_ex.c
 
 # ASM sources
 ASM_SOURCES +=  \

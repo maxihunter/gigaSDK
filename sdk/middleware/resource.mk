@@ -25,6 +25,9 @@ endif
 
 C_SOURCES +=  \
 $(MIDDLEWARE_PATH)/keyboard/keyboard.c  \
+$(MIDDLEWARE_PATH)/led/color_values.c \
+$(MIDDLEWARE_PATH)/led/ws2812.c  \
+$(MIDDLEWARE_PATH)/led/ws2812_demos.c \
 $(MIDDLEWARE_PATH)/decoder/mp3/bitstream.c  \
 $(MIDDLEWARE_PATH)/decoder/mp3/buffers.c \
 $(MIDDLEWARE_PATH)/decoder/mp3/dct32.c  \
@@ -39,7 +42,8 @@ $(MIDDLEWARE_PATH)/decoder/mp3/scalfact.c  \
 $(MIDDLEWARE_PATH)/decoder/mp3/stproc.c  \
 $(MIDDLEWARE_PATH)/decoder/mp3/subband.c  \
 $(MIDDLEWARE_PATH)/decoder/mp3/trigtabs.c  \
-$(MIDDLEWARE_PATH)/decoder/microlzw/microlzw.c
+$(MIDDLEWARE_PATH)/decoder/microlzw/microlzw.c \
+$(MIDDLEWARE_PATH)/decoder/minirle/minirle.c \
 #$(MIDDLEWARE_PATH)/fatfs/diskio.c  \
 #$(MIDDLEWARE_PATH)/fatfs/ff.c  \
 #$(MIDDLEWARE_PATH)/fatfs/ffsystem.c  \

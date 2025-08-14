@@ -28,9 +28,9 @@
 #include "ili9341/ILI9341_GFX.h"
 #include "string.h"
 
-static const uint8_t menu_count = 5;
+static const uint8_t menu_count = 6;
 static uint8_t item_selected = 0;
-static const char menu_items[][16] = { "Run", "Network", "Storage", "Settings", "Test" };
+static const char menu_items[][16] = { "APP", "Network", "Storage", "Media", "Settings", "About" };
 
 /**
   * @brief  The application entry point.
@@ -38,13 +38,13 @@ static const char menu_items[][16] = { "Run", "Network", "Storage", "Settings", 
   */
 void mainMenu_Handler(void)
 {
-    ILI9341_Draw_Filled_Rectangle_Coord(20, 20, 300, 220, DARKGREY);
+    ILI9341_Draw_Filled_Rectangle_Coord(80, 20, 240, 220, DARKGREY);
     for (uint8_t i = 0; i < menu_count; i++) {
         if (item_selected == i) {
-            ILI9341_Draw_Filled_Rectangle_Coord(20, 20+(i*15), 300, 20 + ((i+1) * 15), YELLOW);
-            ILI9341_Draw_Text(menu_items[i], 20, 20 + (i * 15), BLACK, 2, YELLOW);
+            ILI9341_Draw_Filled_Rectangle_Coord(80, 20+(i*20), 240, 20 + ((i+1) * 20), YELLOW);
+            ILI9341_Draw_Text(menu_items[i], 90, 22 + (i * 20), BLACK, 2, YELLOW);
         } else {
-            ILI9341_Draw_Text(menu_items[i], 20, 20 + (i * 15), WHITE, 2, DARKGREY);
+            ILI9341_Draw_Text(menu_items[i], 90, 22 + (i * 20), WHITE, 2, DARKGREY);
         }
     }
 }
@@ -53,7 +53,7 @@ void mainMenu_Handler(void)
 void mainMenu_TriggerUp() {
     item_selected--;
     if (item_selected >= menu_count) {
-        item_selected = 4;
+        item_selected = menu_count-1;
     }
 }
 

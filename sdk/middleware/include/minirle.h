@@ -25,6 +25,7 @@
 #define MINIRLE_H
 
 #include <stddef.h>
+#include "stm32f4xx_hal.h"
 
 #define MAX_HEADER_LEN 512
 
@@ -42,11 +43,11 @@
  * 
  */
 void minirle_compress(
-    char *input,
-    size_t data_size,
-    char *compressed,
-    size_t *comp_size,
-    char *header
+    const uint8_t *input,
+    uint32_t data_size,
+    uint8_t *compressed,
+    uint32_t *comp_size,
+    uint32_t *header
 );
 
 /**
@@ -63,9 +64,50 @@ void minirle_compress(
  * 
  */
 void minirle_decompress(
-    char *compressed,
-    size_t comp_size,
-    char *output
+    const uint8_t *compressed,
+    uint32_t comp_size,
+    uint8_t *output
+);
+
+/**
+ * 
+ * @brief Compresses data using 16-bit word Mini RLE algorithm.
+ *
+ * @details This function takes an input string and compresses it using the Micro Run-Length encoding.
+ * The compressed output, compressed size are returned through the parameters.
+ *
+ * @param input The input data to be compressed.
+ * @param data_size The input data length to be compressed.
+ * @param compressed A pointer to an array that will store the compressed data.
+ * @param comp_size A pointer to a variable that will store the size of the compressed data.
+ * 
+ */
+void minirle_compress16(
+    const uint16_t *input,
+    uint32_t data_size,
+    uint16_t *compressed,
+    uint32_t *comp_size,
+    uint32_t *header
+);
+
+/**
+ * 
+ * @brief Decompresses data using 16-bit word that was compressed using Mini RLE algorithm.
+ *
+ * This function takes a compressed input, decompresses it using the Mini Run-Length encoding,
+ * and stores the decompressed output in the provided output buffer.
+ *
+ * @param compressed A pointer to an array containing the compressed data.
+ * @param comp_size The size of the compressed data.
+ * @param output A pointer to an array that will store the decompressed output.
+ * @param output_size The size of the memory used in the decompression.
+ * 
+ */
+void minirle_decompress16(
+    const uint16_t *compressed,
+    uint32_t comp_size,
+    uint16_t *output
 );
 
 #endif
+

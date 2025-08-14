@@ -110,18 +110,34 @@ void main(int argc, char ** argv) {
         return;
     }
     if ( *(argv[1]) == 'b') {
-        fwrite(data, 1, comp_size+(header_size*4), fp);
+        fwrite(data, 1, comp_size+(header_size*4)+4, fp);
     } else {
         char buff[256] = {0};
-        for(unsigned int i = 0; i < (header_size*4) + comp_size; i++) {
-            sprintf(buff, "%s0x%02X, ", buff, data[i]);
-            //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
-            if ( (i + 1) % 16 == 0 && i != 0 ) {
-                fputs(buff, fp);
-                fputc('\n', fp);
-                buff[0] = '\0';
+        if ( strcmp(argv[1]+1, "8") == 0 ) {
+            for(unsigned int i = 0; i < (header_size*4) + comp_size+4; i++) {
+                sprintf(buff, "%s0x%02X, ", buff, data[i]);
+                //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
+                if ( (i + 1) % 16 == 0 && i != 0 ) {
+                    fputs(buff, fp);
+                    fputc('\n', fp);
+                    buff[0] = '\0';
+                }
+            }
+        } else {
+            for(unsigned int i = 0; i < (header_size*4) + comp_size+4; i+=2) {
+                sprintf(buff, "%s0x%02X%02X, ", buff, data[i+1], data[i]);
+                //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
+                if (i < 120)
+                    printf("(%d+1) % 15 == %d ????  \n", i , (i+1) % 15  );
+                if ( (i+1) % 15 == 0 && i > 5 ) {
+                    fputs(buff, fp);
+                    fputc('\n', fp);
+                    buff[0] = '\0';
+                }
             }
         }
+        if (strlen(buff))
+            fputs(buff, fp);
     }
     fclose(fp);
 #ifdef DEBUG

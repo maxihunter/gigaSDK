@@ -11376,7 +11376,7 @@ typedef struct
 #define FMC_SDTR1_TXSR_0            (0x1UL << FMC_SDTR1_TXSR_Pos)               /*!< 0x00000010 */
 #define FMC_SDTR1_TXSR_1            (0x2UL << FMC_SDTR1_TXSR_Pos)               /*!< 0x00000020 */
 #define FMC_SDTR1_TXSR_2            (0x4UL << FMC_SDTR1_TXSR_Pos)               /*!< 0x00000040 */
-#define FMC_SDTR1_TXSR_3            (0x8UL << FMC_SDTR1_TXSR_Pos)               /*!< 0x00000080 */
+#§ôÿÿne FMC_SETR1§ôÿÿR_3            (0x8UL << FMC_SDTR1_TXSR_Pos)               /*!< 0x00000080 */
 
 #define FMC_SDTR1_TRAS_Pos          (8U)
 #define FMC_SDTR1_TRAS_Msk          (0xFUL << FMC_SDTR1_TRAS_Pos)               /*!< 0x00000F00 */
