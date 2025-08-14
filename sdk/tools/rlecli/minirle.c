@@ -105,17 +105,17 @@ void minirle_compress16(const char *input, size_t data_size, char *compressed, s
     while(idx - 1 < data_size) {
         unsigned int curr_ch = (input[idx] << 8) | input[idx+1];
 
-        //printf("Encode:%d prev[%c%c] curr[%c%c] count[%d]\n", idx, SPLIT_16_TO_8(prev_ch), SPLIT_16_TO_8(curr_ch), ch_count);
         while( prev_ch == curr_ch && ch_count < 65535) {
             curr_ch = (input[idx+(ch_count*2)] << 8) | input[idx+1+(ch_count*2)];
             ch_count++;
         }
         if (ch_count > 1) {
-            header_id[h_count] = idx;
+            header_id[h_count] = idx/2;
             h_count++;
-            compressed[(*comp_size)++] = (ch_count & 0xff00) >> 8;
             compressed[(*comp_size)++] = ch_count & 0xff;
+            compressed[(*comp_size)++] = (ch_count & 0xff00) >> 8;
         }
+        printf("Encode:%d prev[%x%x] curr[%x%x] count[%d] hcount[%d]\n", idx, SPLIT_16_TO_8(prev_ch), SPLIT_16_TO_8(curr_ch), ch_count, h_count);
         compressed[(*comp_size)++] = (prev_ch & 0xff00) >> 8;
         compressed[(*comp_size)++] = prev_ch & 0xff;
         idx += ch_count*2;
@@ -145,15 +145,15 @@ void minirle_decompress16(const char *compressed, size_t comp_size, char *output
 
     while(idx < comp_size) {
         char code = 1;
-        if (out_idx == header_id[header_pos] - 2 ) {
-            code = (new_p[idx] << 8) | new_p[idx+1];
+        if (out_idx - 4 == header_id[header_pos] ) {
+            code = (new_p[idx+1] << 8) | new_p[idx];
             idx += 2;
-            //printf("POSS FOUND AT %d(%d)==%d [next:%d]  (%c%c) count = %d\n", idx, out_idx, header_id[header_pos], header_id[header_pos+1], new_p[idx], new_p[idx+1], code);
+            printf("POSS FOUND AT %d(%d)==%d [next:%d]  (%c%c) count = %d\n", idx, out_idx, header_id[header_pos], header_id[header_pos+1], new_p[idx], new_p[idx+1], code);
             header_pos++;
         }
         char ch = new_p[idx];
         char ch2 = new_p[idx + 1];
-        //printf("out_idx= %d(idx: %d) nchar(%c%c) soutput:%s\n", out_idx, idx, ch, ch2, output);
+        printf("out_idx= %d(idx: %d) nchar(%c%c) soutput:\n", out_idx, idx, ch, ch2, output);
         idx += 2;
 
         while ( code > 0 ) {

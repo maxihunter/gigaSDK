@@ -409,20 +409,34 @@ void ILI9341_Draw_Image_Fader(const char* Image_Array, uint16_t X1, uint16_t Y1,
 			uint8_t bg_g = ((bg & 0x7E) >> 5);
 			uint8_t bg_b = bg & 0x1F;
 			// delta colors
+#if 1
 			if (bg_r > img_r)
-				delta_r = (img_r+(((bg_r-img_r)*fade)/100)) >> 11);
+				delta_r = (img_r+(((bg_r-img_r)*fade)/100)) >> 11;
 			else
-				delta_r = (img_r - (((img_r - bg_r) * fade) / 100)) >> 11);
+				delta_r = (img_r - (((img_r - bg_r) * fade) / 100)) >> 11;
 
 			if (bg_g > img_g)
-				delta_g = (img_g + (((bg_g - img_g) * fade) / 100)) >> 11);
+				delta_g = (img_g + (((bg_g - img_g) * fade) / 100)) >> 11;
 			else
-				delta_g = (img_g - (((img_g - bg_g) * fade) / 100)) >> 11);
-			if (bg_r > img_r)
-				delta_b = (img_br + (((bg_b - img_b) * fade) / 100)) >> 11);
+				delta_g = (img_g - (((img_g - bg_g) * fade) / 100)) >> 11;
+			if (bg_b > img_b)
+				delta_b = (img_b + (((bg_b - img_b) * fade) / 100)) >> 11;
 			else
-				delta_b = (img_b - (((img_b - bg_b) * fade) / 100)) >> 11);
-			
+				delta_b = (img_b - (((img_b - bg_b) * fade) / 100)) >> 11;
+#else
+				delta_r = (img_r+(((bg_r-img_r)*fade)/100)) >> 11;
+			else
+				delta_r = (img_r - (((img_r - bg_r) * fade) / 100)) >> 11;
+
+			if (bg_g > img_g)
+				delta_g = (img_g + (((bg_g - img_g) * fade) / 100)) >> 11;
+			else
+				delta_g = (img_g - (((img_g - bg_g) * fade) / 100)) >> 11;
+			if (bg_b > img_b)
+				delta_b = (img_br + (((bg_b - img_b) * fade) / 100)) >> 11;
+			else
+				delta_b = (img_b - (((img_b - bg_b) * fade) / 100)) >> 11;
+#endif
 			uint16_t res_rgb = ((delta_r & 0xF8) << 8) | ((delta_g & 0xFC) << 3) | ((delta_b & 0x1F));
 			Temp_small_buffer[k] = res_rgb;
 		}

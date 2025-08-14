@@ -146,11 +146,12 @@ void minirle_decompress16(const uint16_t *compressed, uint32_t comp_size, uint16
         header_id[i] = *(((unsigned int *)compressed)+i+1);
     }
     //printf("\n");
-    //const uint16_t * new_p = compressed + (sizeof(unsigned int) * (headers+1));
-    const uint16_t * new_p = *(((unsigned int *)compressed)+headers+1);
+    const uint16_t * new_p = compressed + ((sizeof(unsigned int)/2) * (headers+1));
+    //const uint16_t * new_p = *(((unsigned int *)compressed)+headers+1);
     int header_pos = 0;
 
     while(idx < comp_size) {
+        printf("out_idx= %d(idx: %d) nchar(0x%x:) soutput:\n\r", out_idx, idx, new_p[idx]);
         uint16_t code = 1;
         if (out_idx == header_id[header_pos] - 1  ) {
             code = new_p[idx++];
@@ -158,7 +159,7 @@ void minirle_decompress16(const uint16_t *compressed, uint32_t comp_size, uint16
             header_pos++;
         }
         uint16_t ch = new_p[idx];
-        printf("out_idx= %d(idx: %d) nchar(%i) soutput:\n\r", out_idx, idx, ch);
+        
 
         output[out_idx++] = ch;
         code--;
