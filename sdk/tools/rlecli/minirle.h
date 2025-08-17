@@ -26,7 +26,7 @@
 
 #include <stddef.h>
 
-#define MAX_HEADER_LEN 512
+#define MAX_HEADER_LEN 1024
 
 /**
  * 
@@ -46,7 +46,8 @@ void minirle_compress(
     size_t data_size,
     char *compressed,
     size_t *comp_size,
-    char *header
+    char *header,
+    unsigned int threshold
 );
 
 /**
@@ -86,7 +87,8 @@ void minirle_compress16(
     size_t data_size,
     char *compressed,
     size_t *comp_size,
-    char *header
+    char *header,
+    unsigned int threshold
 );
 
 /**

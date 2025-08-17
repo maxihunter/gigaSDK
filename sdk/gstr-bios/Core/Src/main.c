@@ -30,8 +30,9 @@
 #include "bootup.h"
 #include "string.h"
 #include <stdio.h>
-#include "test.h"
-#include "test16.h"
+//#include "test.h"
+//#include "test16.h"
+#include "test_i16.h"
 #include "minirle.h"
 
 /* USER CODE END Includes */
@@ -177,7 +178,7 @@ int main(void)
   HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
   //HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
   ILI9341_Init();
-  ILI9341_Draw_Splash();
+  //ILI9341_Draw_Splash();
 
   FATFS fs;
   FRESULT res;
@@ -191,11 +192,16 @@ int main(void)
   //FILINFO fno;
   HAL_Delay(1000);
   ws2812_send(50, 200, 50);
-  char dec_data[7000] = {0};
+  char dec_data[27000] = {0};
 
   printf("===========================================================\n\r");
-  minirle_decompress16(test_file_16, 568, dec_data );
-  printf("%s\n\r", dec_data);
+  //25080/16349
+  minirle_decompress16(bootup_test_file_16, 16349, dec_data );
+  printf("GO!!!!\n\r");
+
+  ILI9341_Fill_Screen(WHITE);
+  
+  ILI9341_Draw_SmallImage(dec_data, 20, 70, 304, 114);
   /* USER CODE END 2 */
 
   /* Infinite loop */

@@ -31,19 +31,20 @@
 //#define DEGUB
 
 static void print_help(char * name) {
-    printf("%s - tool to compress data by RLE algorithm\n", name);
+    printf("%s - tool to compress data by RLE algorithm by MaxiHunter\n", name);
     printf("Usage:\n");
-    printf("%s <type> <input> <output>\n", name);
+    printf("%s <type> <input> <output> <threshold>\n", name);
     printf("\t <type> - \"b8\" or \"b16\" or \"p8\" or \"p16\"\n");
     printf("\t\t Where: b - is a binary format, p - printable format\n");
     printf("\t <input> - input file name\n");
     printf("\t <output> - output file name\n");
+    printf("\t <threshold> - skipping threshold of repeating data to the head index\n");
 }
 
 
 void main(int argc, char ** argv) {
 
-    if (argc < 4) {
+    if (argc < 5) {
         print_help(argv[0]);
         return;
     }
@@ -51,11 +52,12 @@ void main(int argc, char ** argv) {
          strcmp(argv[1], "b16") != 0 &&
          strcmp(argv[1], "p8") != 0 &&
          strcmp(argv[1], "p16") != 0 ) {
-        printf("Error: Invalid data type\n");
+        printf("Error: Invalid compress data type\n");
         return;
     }
     const char *input = argv[2];
     const char *output = argv[3];
+    unsigned int thres = atoi(argv[4]);
 
     FILE *fp = fopen(input, "r");
     if (fp == NULL) {
@@ -83,7 +85,7 @@ void main(int argc, char ** argv) {
         printf("Memory allocation failed: %s\n", strerror(errno));
         return;
     }
-    char head[4096] = {0};
+    char head[MAX_HEADER_LEN*4] = {0};
     size_t comp_size = 0;
     printf("Input data size = %d\n", size);
 
@@ -91,17 +93,18 @@ void main(int argc, char ** argv) {
     // then pass the output to th `compressed`
     // variable.
     if ( strcmp(argv[1]+1, "8") == 0 )
-        minirle_compress(in_data, size, compressed, &comp_size, head);
+        minirle_compress(in_data, size, compressed, &comp_size, head, thres);
     else
-        minirle_compress16(in_data, size, compressed, &comp_size, head);
+        minirle_compress16(in_data, size, compressed, &comp_size, head, thres);
 
-    unsigned int header_size = (unsigned int *)*head;
+    // big-endian, WTF ??????
+    unsigned int header_size = (((*head+3) << 24 ) & 0x00000000) | ((*(head+2) << 16) & 0xff0000) | ((*(head+1) << 8) & 0xff00) | ((*head) & 0xff);
     unsigned char * data = (char *) malloc (sizeof(char) * (size+(header_size*4)));
     if (data == NULL) {
         printf("Memory allocation failed: %s\n", strerror(errno));
         return;
     }
-    printf("Compressed(%d/%ld) Headersize(%d): \n", size, comp_size, header_size);
+    printf("Compressed(%d/%ld) Headersize(%x) (%x %x %x %x): \n", size, comp_size, header_size, head[0], head[1], head[2], head[3]);
 
     char * decomp = (char *) malloc(size * sizeof(char));
     memset(decomp, 0, size * sizeof(char));
@@ -119,7 +122,7 @@ void main(int argc, char ** argv) {
         char buff[256] = {0};
         if ( strcmp(argv[1]+1, "8") == 0 ) {
             for(unsigned int i = 0; i < (header_size*4) + comp_size+4; i++) {
-                sprintf(buff, "%s0x%02X, ", buff, data[i]);
+                sprintf(buff, "%s 0x%02X,", buff, data[i]);
                 //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
                 if ( (i + 1) % 16 == 0 && i != 0 ) {
                     fputs(buff, fp);
@@ -129,7 +132,7 @@ void main(int argc, char ** argv) {
             }
         } else {
             for(unsigned int i = 0; i < (header_size*4) + comp_size+4; i+=2) {
-                sprintf(buff, "%s0x%02X%02X, ", buff, data[i+1], data[i]);
+                sprintf(buff, "%s 0x%02X%02X,", buff, data[i+1], data[i]);
                 //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
                 if ( (i/2) % 15 == 0 && i > 5 ) {
                     fputs(buff, fp);
@@ -167,10 +170,10 @@ void main(int argc, char ** argv) {
 #ifdef DEBUG
     printf("Decompressed: %s\n", decomp);
 #endif
-    free(decomp);
+/*    free(decomp);
     free(data);
     free(compressed);
     free(in_data);
-
+*/
 }
 

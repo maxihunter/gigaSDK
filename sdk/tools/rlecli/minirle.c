@@ -24,11 +24,10 @@
 #include "minirle.h"
 #include <stdio.h>
 
-#define MAX_HEADER_LEN 2048
-
 #define SPLIT_16_TO_8(x) (x & 0xff00) >> 8, x & 0xff
 
-void minirle_compress(const char *input, size_t data_size, char *compressed, size_t *comp_size, char * header) {
+    
+void minirle_compress(const char *input, size_t data_size, char *compressed, size_t *comp_size, char * header, unsigned int threshold) {
     int prev_ch = input[0], idx = 1;
     int ch_count = 1;
     unsigned int header_id[MAX_HEADER_LEN] = {0};
@@ -44,13 +43,17 @@ void minirle_compress(const char *input, size_t data_size, char *compressed, siz
             curr_ch = input[idx+(block++)];
             ch_count++;
         }
-        if (ch_count > 1) {
+        if (ch_count > threshold && h_count < MAX_HEADER_LEN) {
             header_id[h_count] = idx - 1;
             h_count++;
             compressed[(*comp_size)++] = ch_count;
+            ch_count = 1;
         }
-        compressed[(*comp_size)++] = prev_ch;
-        idx += block;
+        while (ch_count > 0) {
+            compressed[(*comp_size)++] = prev_ch;
+            ch_count--;
+            idx++;
+        }
         ch_count = 1;
         prev_ch = curr_ch;
     }
@@ -94,7 +97,7 @@ void minirle_decompress(const char *compressed, size_t comp_size, char *output) 
     }
 }
 
-void minirle_compress16(const char *input, size_t data_size, char *compressed, size_t *comp_size, char * header) {
+void minirle_compress16(const char *input, size_t data_size, char *compressed, size_t *comp_size, char * header, unsigned int threshold) {
     unsigned int prev_ch = (input[0] << 8) | input[1] ;
     int idx = 2;
     int ch_count = 1;
@@ -108,21 +111,26 @@ void minirle_compress16(const char *input, size_t data_size, char *compressed, s
             curr_ch = (input[idx+(ch_count*2)] << 8) | input[idx+1+(ch_count*2)];
             ch_count++;
         }
-        if (ch_count > 1) {
+        if (ch_count > threshold && h_count < MAX_HEADER_LEN) {
             header_id[h_count] = idx/2;
             h_count++;
             printf("COUNT CHAR at:%d comp_size=%ld prev[%x%x] curr[%x%x] count[%d] hcount[%d]\n", idx,*comp_size, SPLIT_16_TO_8(prev_ch), SPLIT_16_TO_8(curr_ch), ch_count, h_count);
             compressed[(*comp_size)++] = ch_count & 0xff;
             compressed[(*comp_size)++] = (ch_count & 0xff00) >> 8;
+            idx += (ch_count-1) * 2;
+            ch_count = 1;
         }
         printf("Encode:%d prev[%x%x] curr[%x%x] count[%d] hcount[%d]\n", idx, SPLIT_16_TO_8(prev_ch), SPLIT_16_TO_8(curr_ch), ch_count, h_count);
-        compressed[(*comp_size)++] = (prev_ch & 0xff00) >> 8;
-        compressed[(*comp_size)++] = prev_ch & 0xff;
-        idx += ch_count*2;
+        while (ch_count > 0) {
+            compressed[(*comp_size)++] = (prev_ch & 0xff00) >> 8;
+            compressed[(*comp_size)++] = prev_ch & 0xff;
+            ch_count--;
+            idx += 2;
+        }
         ch_count = 1;
         prev_ch = curr_ch;
     }
-    compressed[(*comp_size)++] = (1 << 8) | prev_ch;
+    compressed[(*comp_size)++] = prev_ch;
     *(((unsigned int *)header)) = h_count;
     for (int i = 0; i < h_count; i++) {
         *(((unsigned int *)header) + i + 1) = header_id[i];
@@ -134,26 +142,26 @@ void minirle_decompress16(const char *compressed, size_t comp_size, char *output
     unsigned int header_id[MAX_HEADER_LEN] = {0};
     unsigned int headers = *((unsigned int *)compressed);
 
-    //printf("WHAT HEADER SIZE = %d comp_size = %d \n", headers, comp_size);
+    printf("WHAT HEADER SIZE = %d comp_size = %d \n", headers, comp_size);
     for (int i = 0; i < headers; i++) {
-        //printf("[0x%02X]", compressed[i]);
         header_id[i] = *(((unsigned int *)compressed)+i+1);
+        printf("[0x%08X] ", header_id[i]);
     }
-    //printf("\n");
+    printf("\n");
     const char * new_p = compressed + (sizeof(unsigned int) * (headers+1));
     int header_pos = 0;
 
     while(idx < comp_size) {
-        char code = 1;
-        if (out_idx - 4 == header_id[header_pos] ) {
-            code = (new_p[idx+1] << 8) | new_p[idx];
+        unsigned int code = 1;
+        if (out_idx == (header_id[header_pos] * 2) - 2 ) {
+            code = ((new_p[idx+1] << 8) & 0xff00) | (new_p[idx] & 0xff);
             idx += 2;
-            printf("POSS FOUND AT %d(%d)==%d [next:%d]  (%c%c) count = %d\n", idx, out_idx, header_id[header_pos], header_id[header_pos+1], new_p[idx], new_p[idx+1], code);
+            printf("POSS FOUND AT idx%d(out_idx%d)==header%d [next:%d]  (%02x%02x) count = %u\n", idx, out_idx, header_id[header_pos]*2, header_id[header_pos+1]*2, new_p[idx], new_p[idx+1], code);
             header_pos++;
         }
         char ch = new_p[idx];
         char ch2 = new_p[idx + 1];
-        printf("out_idx= %d(idx: %d) nchar(%c%c) soutput:\n", out_idx, idx, ch, ch2, output);
+        printf("out_idx= %d(idx: %d) nchar(%02x%02x) soutput:\n", out_idx, idx, ch, ch2);
         idx += 2;
 
         while ( code > 0 ) {
