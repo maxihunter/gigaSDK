@@ -92,6 +92,18 @@ volatile uint16_t LCD_WIDTH	 = ILI9341_SCREEN_WIDTH;
 
 extern SPI_HandleTypeDef hspi2;
 
+static volatile uint32_t lcd_send_data = 0;
+
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    //printf("COMPLETE\n\r");
+    if (hspi->Instance == SPI2)
+    {
+        lcd_send_data = 0;
+    }
+}
+
+
 /* Initialize SPI */
 void ILI9341_SPI_Init(void)
 {
@@ -412,12 +424,67 @@ void ILI9341_Draw_Colour_Burst(uint16_t Colour, uint32_t Size)
     HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_SET);
 }
 
+void ILI9341_Draw_Colour_Burst_DMA(uint16_t Colour, uint32_t Size)
+{
+    //SENDS COLOUR
+    uint32_t Buffer_Size = 0;
+    if((Size*2) < BURST_MAX_SIZE)
+    {
+        Buffer_Size = Size;
+    }
+    else
+    {
+        Buffer_Size = BURST_MAX_SIZE;
+    }
+
+    HAL_GPIO_WritePin(LCD_DC_PORT, LCD_DC_PIN, GPIO_PIN_SET);	
+    HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
+
+    unsigned char chifted = 	Colour>>8;;
+    unsigned char burst_buffer[Buffer_Size];
+    for(uint32_t j = 0; j < Buffer_Size; j+=2)
+    {
+        burst_buffer[j] = 	chifted;
+        burst_buffer[j+1] = Colour;
+    }
+
+    uint32_t Sending_Size = Size*2;
+    uint32_t Sending_in_Block = Sending_Size/Buffer_Size;
+    uint32_t Remainder_from_block = Sending_Size%Buffer_Size;
+
+    lcd_send_data = 1;
+    if(Sending_in_Block != 0)
+    {
+        for(uint32_t j = 0; j < (Sending_in_Block); j++)
+        {
+            lcd_send_data = 1;
+            HAL_SPI_Transmit_DMA(HSPI_INSTANCE, (unsigned char *)burst_buffer, Buffer_Size);
+            while(lcd_send_data == 1) {
+                __NOP();
+            }
+        }
+    }
+
+    //REMAINDER!
+    HAL_SPI_Transmit(HSPI_INSTANCE, (unsigned char *)burst_buffer, Remainder_from_block, 10);	
+
+    HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_SET);
+}
+
 //FILL THE ENTIRE SCREEN WITH SELECTED COLOUR (either #define-d ones or custom 16bit)
 /*Sets address (entire screen) and Sends Height*Width ammount of colour information to LCD*/
 void ILI9341_Fill_Screen(uint16_t Colour)
 {
     ILI9341_Set_Address(0,0,LCD_WIDTH,LCD_HEIGHT);	
-    ILI9341_Draw_Colour_Burst(Colour, LCD_WIDTH*LCD_HEIGHT);	
+    ILI9341_Draw_Colour_Burst_DMA(Colour, LCD_WIDTH*LCD_HEIGHT);
+    //ILI9341_Draw_Colour_Burst(Colour, LCD_WIDTH*LCD_HEIGHT);
+}
+
+void ILI9341_Fill_ScreenPart(uint16_t Colour, uint16_t X,uint16_t Y,uint16_t X2,uint16_t Y2)
+{
+    ILI9341_Set_Address(X,Y,X2,Y2);
+    ILI9341_Draw_Colour_Burst_DMA(Colour, (X2-X)*(Y2-Y));
+    //ILI9341_Draw_Colour_Burst(Colour, LCD_WIDTH*LCD_HEIGHT);
 }
 
 //DRAW PIXEL AT XY POSITION WITH SELECTED COLOUR

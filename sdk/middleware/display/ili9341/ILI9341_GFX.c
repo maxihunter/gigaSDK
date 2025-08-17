@@ -52,6 +52,7 @@
 //#include "spi.h"
 
 extern SPI_HandleTypeDef hspi2;
+
 /*Draw hollow circle at X,Y location with specified radius and colour. X and Y represent circles center */
 void ILI9341_Draw_Hollow_Circle(uint16_t X, uint16_t Y, uint16_t Radius, uint16_t Colour)
 {

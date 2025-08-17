@@ -31,31 +31,36 @@
 //#define DEGUB
 
 static void print_help(char * name) {
-    printf("%s - tool to compress data by RLE algorithm\n", name);
+    printf("%s - tool to compress data by RLE algorithm by MaxiHunter\n", name);
     printf("Usage:\n");
-    printf("%s <type> <input> <output>\n", name);
+    printf("%s <type> <input> <output> <threshold>\n", name);
     printf("\t <type> - \"b8\" or \"b16\" or \"p8\" or \"p16\"\n");
     printf("\t\t Where: b - is a binary format, p - printable format\n");
     printf("\t <input> - input file name\n");
     printf("\t <output> - output file name\n");
+    printf("\t <threshold> - skipping threshold of repeating data to the head index\n");
 }
 
 
 void main(int argc, char ** argv) {
 
-    if (argc < 4) {
+    if (argc < 5) {
         print_help(argv[0]);
         return;
     }
+    // TODO change to vargs parsing; currently just for testing
     if ( strcmp(argv[1], "b8") != 0 &&
          strcmp(argv[1], "b16") != 0 &&
          strcmp(argv[1], "p8") != 0 &&
          strcmp(argv[1], "p16") != 0 ) {
-        printf("Error: Invalid data type\n");
+        printf("Error: Invalid compress data type\n");
         return;
     }
     const char *input = argv[2];
     const char *output = argv[3];
+    unsigned int thres = atoi(argv[4]);
+    // size of encoded block in bytes
+    unsigned int block_size = atoi(argv[1]+1) / 8;
 
     FILE *fp = fopen(input, "r");
     if (fp == NULL) {
@@ -83,30 +88,40 @@ void main(int argc, char ** argv) {
         printf("Memory allocation failed: %s\n", strerror(errno));
         return;
     }
-    char head[4096] = {0};
-    size_t comp_size = 0;
-    printf("Input data size = %d\n", size);
+    char head[MAX_HEADER_LEN*4] = {0};
+    uint32_t comp_size = 0;
+    //printf("Input data size = %d\n", size);
 
     // Compress the input string via RLE algorithm,
-    // then pass the output to th `compressed`
-    // variable.
     if ( strcmp(argv[1]+1, "8") == 0 )
-        minirle_compress(in_data, size, compressed, &comp_size, head);
-    else
-        minirle_compress16(in_data, size, compressed, &comp_size, head);
+        minirle_compress(in_data, size, compressed, &comp_size, head, thres);
+    else {
+        // because in_data is a 8-bit char, and we want to encode as 16-bit, split size by 2
+        minirle_compress16((uint16_t *)in_data, size / 2, (uint16_t *)compressed, &comp_size, (uint32_t*) head, thres);
+    }
 
-    unsigned int header_size = (unsigned int *)*head;
+    // big-endian, WTF ??????
+    unsigned int header_size = (((*head+3) << 24 ) & 0x00000000) | ((*(head+2) << 16) & 0xff0000) | ((*(head+1) << 8) & 0xff00) | ((*head) & 0xff);
     unsigned char * data = (char *) malloc (sizeof(char) * (size+(header_size*4)));
     if (data == NULL) {
         printf("Memory allocation failed: %s\n", strerror(errno));
         return;
     }
-    printf("Compressed(%d/%ld) Headersize(%d): \n", size, comp_size, header_size);
-
     char * decomp = (char *) malloc(size * sizeof(char));
     memset(decomp, 0, size * sizeof(char));
     memcpy((unsigned int*)data, head, 4096);
-    memcpy(data+((header_size+1)*4), compressed, comp_size);
+    printf("%d-bit commpression summary:\n", 8 *block_size);
+    printf("\tOriginal input data size: %u bytes\n", size);
+    printf("\tCompressed data size: %u bytes (including headers: %u bytes)\n", (comp_size*block_size) + header_size*4, header_size*4);
+    printf("\tHeader lines: %u records\n", header_size+1);
+    if ( strcmp(argv[1]+1, "8") == 0 ) {
+        printf("8-bit Compressed(%u/%u) Headersize(%x) (%x %x %x %x): \n", size, comp_size, header_size, head[0], head[1], head[2], head[3]);
+        memcpy(data+((header_size+1)*4), compressed, comp_size);
+    } else {
+        printf("16-bit Compressed(%u/%u) Headersize(%x) (%x %x %x %x): \n", size, comp_size*2, header_size, head[0], head[1], head[2], head[3]);
+        memcpy(data+((header_size+1)*4), compressed, comp_size*2);
+    }
+
 
     fp = fopen(output, "w");
     if (fp == NULL) {
@@ -117,10 +132,11 @@ void main(int argc, char ** argv) {
         fwrite(data, 1, comp_size+(header_size*4)+4, fp);
     } else {
         char buff[256] = {0};
+        char buff2[32] = {0};
         if ( strcmp(argv[1]+1, "8") == 0 ) {
             for(unsigned int i = 0; i < (header_size*4) + comp_size+4; i++) {
-                sprintf(buff, "%s0x%02X, ", buff, data[i]);
-                //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
+                sprintf(buff2, "0x%02X,", data[i]);
+                strncat(buff, buff2, 10);
                 if ( (i + 1) % 16 == 0 && i != 0 ) {
                     fputs(buff, fp);
                     fputc('\n', fp);
@@ -129,8 +145,8 @@ void main(int argc, char ** argv) {
             }
         } else {
             for(unsigned int i = 0; i < (header_size*4) + comp_size+4; i+=2) {
-                sprintf(buff, "%s0x%02X%02X, ", buff, data[i+1], data[i]);
-                //printf("0x%02X(%c), ", (compressed[i] & 0xff), (compressed[i] & 0xff) );
+                sprintf(buff2, "0x%02X%02X,", data[i+1], data[i]);
+                strncat(buff, buff2, 10);
                 if ( (i/2) % 15 == 0 && i > 5 ) {
                     fputs(buff, fp);
                     fputc('\n', fp);
@@ -145,9 +161,7 @@ void main(int argc, char ** argv) {
 #ifdef DEBUG
     printf("comp: %s\n", compressed);
 #endif
-    // Decompress the compressed output
-    // then pass the decompressed string
-    // to the variable `decompressed`.
+    // Decompress the compressed output to verify that all went good
     if (decomp == NULL) {
         printf("Memory allocation failed!\n");
         return;
@@ -156,7 +170,7 @@ void main(int argc, char ** argv) {
     if ( strcmp(argv[1]+1, "8") == 0 )
         minirle_decompress(data, comp_size, decomp);
     else
-        minirle_decompress16(data, comp_size, decomp);
+        minirle_decompress16((uint16_t *)data, comp_size, (uint16_t *)decomp);
 
     for (unsigned int i = 0; i < size; i++) {
         if (*(in_data+i) != *(decomp+i)) {

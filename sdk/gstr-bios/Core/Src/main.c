@@ -30,8 +30,9 @@
 #include "bootup.h"
 #include "string.h"
 #include <stdio.h>
-#include "test.h"
-#include "test16.h"
+//#include "test.h"
+//#include "test16.h"
+#include "test_i16.h"
 #include "minirle.h"
 
 /* USER CODE END Includes */
@@ -81,6 +82,7 @@ static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
 static void ILI9341_Draw_Splash(void);
 static void ILI9341_FPS_Test(void);
+static void ILI9341_FPS_Test2(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -191,11 +193,22 @@ int main(void)
   //FILINFO fno;
   HAL_Delay(1000);
   ws2812_send(50, 200, 50);
-  char dec_data[7000] = {0};
+  char dec_data[27000] = {0};
 
   printf("===========================================================\n\r");
-  minirle_decompress16(test_file_16, 568, dec_data );
-  printf("%s\n\r", dec_data);
+  //25080/16349
+  //minirle_decompress16(bootup_test_file_16, 16349, dec_data );
+  printf("GO!!!!\n\r");
+
+  HAL_Delay(1000);
+  ILI9341_Fill_Screen(WHITE);
+  
+  //ILI9341_Draw_SmallImage(dec_data, 20, 70, 304, 114);
+  HAL_Delay(5000);
+  ILI9341_FPS_Test();
+  HAL_Delay(5000);
+  ILI9341_FPS_Test2();
+  HAL_Delay(5000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -638,6 +651,44 @@ static void ILI9341_FPS_Test(void) {
   ILI9341_Fill_Screen(MAGENTA);
   ILI9341_Fill_Screen(YELLOW);
   ILI9341_Fill_Screen(ORANGE);
+  uint32_t secs = (HAL_GetTick() - tickstart);
+  if (secs <= 0) secs = 1;
+  uint32_t frate = 25000 / (secs);
+  ILI9341_Fill_Screen(BLACK);
+  snprintf(buff, 24, "FPS:%lu(%lu)", frate,secs);
+  ILI9341_Draw_Text(buff, 150, 0, WHITE, 1, BLACK);
+}
+
+static void ILI9341_FPS_Test2(void) {
+#define RESOL 50, 20, 270, 220
+  char buff[20] = {0};
+  uint32_t tickstart = HAL_GetTick();
+  ILI9341_Fill_ScreenPart(BLUE, RESOL);
+  ILI9341_Fill_ScreenPart(GREEN, RESOL);
+  ILI9341_Fill_ScreenPart(PINK, RESOL);
+  ILI9341_Fill_ScreenPart(OLIVE, RESOL);
+  ILI9341_Fill_ScreenPart(NAVY, RESOL);
+  ILI9341_Fill_ScreenPart(PURPLE, RESOL);
+  ILI9341_Fill_ScreenPart(MAROON, RESOL);
+  ILI9341_Fill_ScreenPart(LIGHTGREY, RESOL);
+  ILI9341_Fill_ScreenPart(CYAN, RESOL);
+  ILI9341_Fill_ScreenPart(MAGENTA, RESOL);
+  ILI9341_Fill_ScreenPart(YELLOW, RESOL);
+  ILI9341_Fill_ScreenPart(ORANGE, RESOL);
+  ILI9341_Fill_ScreenPart(GREENYELLOW, RESOL);
+  ILI9341_Fill_ScreenPart(WHITE, RESOL);
+  ILI9341_Fill_ScreenPart(BLUE, RESOL);
+  ILI9341_Fill_ScreenPart(GREEN, RESOL);
+  ILI9341_Fill_ScreenPart(PINK, RESOL);
+  ILI9341_Fill_ScreenPart(OLIVE, RESOL);
+  ILI9341_Fill_ScreenPart(NAVY, RESOL);
+  ILI9341_Fill_ScreenPart(PURPLE, RESOL);
+  ILI9341_Fill_ScreenPart(MAROON, RESOL);
+  ILI9341_Fill_ScreenPart(LIGHTGREY, RESOL);
+  ILI9341_Fill_ScreenPart(CYAN, RESOL);
+  ILI9341_Fill_ScreenPart(MAGENTA, RESOL);
+  ILI9341_Fill_ScreenPart(YELLOW, RESOL);
+  ILI9341_Fill_ScreenPart(ORANGE, RESOL);
   uint32_t secs = (HAL_GetTick() - tickstart);
   if (secs <= 0) secs = 1;
   uint32_t frate = 25000 / (secs);

@@ -143,6 +143,7 @@ void ILI9341_Set_Rotation(uint8_t Rotation);
 void ILI9341_Enable(void);
 void ILI9341_Init(void);
 void ILI9341_Fill_Screen(uint16_t Colour);
+void ILI9341_Fill_ScreenPart(uint16_t Colour, uint16_t X,uint16_t Y,uint16_t X2,uint16_t Y2);
 void ILI9341_Draw_Colour(uint16_t Colour);
 void ILI9341_Draw_Pixel(uint16_t X,uint16_t Y,uint16_t Colour);
 void ILI9341_Draw_Colour_Burst(uint16_t Colour, uint32_t Size);

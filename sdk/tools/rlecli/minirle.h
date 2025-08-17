@@ -25,8 +25,9 @@
 #define MINIRLE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
-#define MAX_HEADER_LEN 512
+#define MAX_HEADER_LEN 1024
 
 /**
  * 
@@ -39,14 +40,20 @@
  * @param data_size The input data length to be compressed.
  * @param compressed A pointer to an array that will store the compressed data.
  * @param comp_size A pointer to a variable that will store the size of the compressed data.
+ * @param header A pointer to a variable that will store the header with necessary decompression data.
+ * @param threshold A variable that will determine a minimum identical byte sequence to be encoded. Please 
+ *          pay attention that maximum header size is limited by MAX_HEADER_LEN, if input data len is too large
+ *          header would be exceeded during encoding process. To avoid it you can try different threshold and see what
+ *          result will be. 0 =< threshold < MAX_HEADER_LEN
  * 
  */
 void minirle_compress(
     const char *input,
-    size_t data_size,
+    uint32_t data_size,
     char *compressed,
-    size_t *comp_size,
-    char *header
+    uint32_t *comp_size,
+    char *header,
+    uint32_t threshold
 );
 
 /**
@@ -64,7 +71,7 @@ void minirle_compress(
  */
 void minirle_decompress(
     const char *compressed,
-    size_t comp_size,
+    uint32_t comp_size,
     char *output
 );
 
@@ -75,18 +82,24 @@ void minirle_decompress(
  * @details This function takes an input string and compresses it using the Micro Run-Length encoding.
  * The compressed output, compressed size are returned through the parameters.
  *
- * @param input The input data to be compressed.
+ * @param input The input data to be compressed. Encoding by 16-bit of input data.
  * @param data_size The input data length to be compressed.
  * @param compressed A pointer to an array that will store the compressed data.
  * @param comp_size A pointer to a variable that will store the size of the compressed data.
+ * @param header A pointer to a variable that will store the header with necessary decompression data.
+ * @param threshold A variable that will determine a minimum identical byte sequence to be encoded. Please 
+ *          pay attention that maximum header size is limited by MAX_HEADER_LEN, if input data len is too large
+ *          header would be exceeded during encoding process. To avoid it you can try different threshold and see what
+ *          result will be. 0 =< threshold < MAX_HEADER_LEN
  * 
  */
 void minirle_compress16(
-    const char *input,
-    size_t data_size,
-    char *compressed,
-    size_t *comp_size,
-    char *header
+    const uint16_t *input,
+    uint32_t data_size,
+    uint16_t *compressed,
+    uint32_t *comp_size,
+    uint32_t *header,
+    uint32_t threshold
 );
 
 /**
@@ -103,9 +116,9 @@ void minirle_compress16(
  * 
  */
 void minirle_decompress16(
-    const char *compressed,
-    size_t comp_size,
-    char *output
+    const uint16_t *compressed,
+    uint32_t comp_size,
+    uint16_t *output
 );
 
 #endif
