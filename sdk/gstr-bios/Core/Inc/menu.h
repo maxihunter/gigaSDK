@@ -1,24 +1,6 @@
 /*
  * This file is part of the gigaSDK source code.
  * Copyright (c) 2025 MaxiHunter
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
  */
 
 #ifndef __MENU_H
@@ -28,12 +10,87 @@
 extern "C" {
 #endif
 
-#include "stm32f4xx_hal.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
+#include "rtc/rtc_clock.h"
+
+#define MENU_MAX_DEPTH       8U
+#define MENU_VISIBLE_ITEMS   8U
+
+typedef struct Menu Menu;
+typedef void (*MenuCallback)(void);
+
+typedef enum {
+    MENU_ITEM_SUBMENU,
+    MENU_ITEM_INT,
+    MENU_ITEM_BOOL,
+    MENU_ITEM_ACTION,
+    MENU_ITEM_APPLICATION
+} MenuItemType;
+
+typedef struct {
+    const char *label;
+    MenuItemType type;
+    union {
+        const Menu *submenu;
+        struct {
+            int32_t *value;
+            int32_t minimum;
+            int32_t maximum;
+            int32_t step;
+        } integer;
+        bool *boolean;
+        MenuCallback callback;
+    } data;
+} MenuItem;
+
+struct Menu {
+    const char *title;
+    const MenuItem *items;
+    size_t count;
+};
+
+#define MENU_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+#define MENU_SUBMENU(label_, menu_) \
+    { (label_), MENU_ITEM_SUBMENU, { .submenu = (menu_) } }
+#define MENU_INT(label_, value_, min_, max_, step_) \
+    { (label_), MENU_ITEM_INT, \
+      { .integer = { (value_), (min_), (max_), (step_) } } }
+#define MENU_BOOL(label_, value_) \
+    { (label_), MENU_ITEM_BOOL, { .boolean = (value_) } }
+#define MENU_ACTION(label_, callback_) \
+    { (label_), MENU_ITEM_ACTION, { .callback = (callback_) } }
+/*
+ * The callback of an application item must not return.  It takes ownership of
+ * the display, input and main loop after it is called.
+ */
+#define MENU_APPLICATION(label_, callback_) \
+    { (label_), MENU_ITEM_APPLICATION, { .callback = (callback_) } }
+
+void MenuEngine_Init(const Menu *root);
+void MenuEngine_Draw(void);
+void MenuEngine_Up(void);
+void MenuEngine_Down(void);
+void MenuEngine_Left(void);
+void MenuEngine_Right(void);
+void MenuEngine_Select(void);
+void MenuEngine_Back(void);
+bool MenuEngine_IsEditing(void);
+
+/* Default BIOS menu and compatibility entry points. */
+void mainMenu_Init(MenuCallback application_callback);
 void mainMenu_Handler(void);
 void mainMenu_TriggerUp(void);
 void mainMenu_TriggerDown(void);
+void mainMenu_TriggerLeft(void);
+void mainMenu_TriggerRight(void);
+void mainMenu_TriggerSelect(void);
+void mainMenu_TriggerBack(void);
 uint8_t mainMenu_GetSelectedId(void);
+
+void menuHeader_Handler(RTC_ClockDateTime *c_time, int batt);
 
 #ifdef __cplusplus
 }

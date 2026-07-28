@@ -24,6 +24,8 @@ $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc.c \
+$(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
 $(DRIVER_DIR)/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c \
@@ -49,4 +51,3 @@ C_INCLUDES +=  \
 -I$(DRIVER_DIR)/CMSIS/Include
 
 endif
-

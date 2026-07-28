@@ -31,31 +31,30 @@
 struct key_info {
 	GPIO_TypeDef *port; ///< Port number of the key
 	uint16_t pin; ///< Pin number of the key
+	uint32_t mask; ///< KBRD_BTN_* value returned for the key
 };
 
 /** @brief Keymap array data size */
-#define KEY_MAP_SIZE 8
+#define KEY_MAP_SIZE (sizeof(key_map) / sizeof(key_map[0]))
 
 /** @brief Keymap array */
 const struct key_info key_map[] = {
-	{GPIOE, GPIO_PIN_6},
-	{GPIOB, GPIO_PIN_4},
-	{GPIOB, GPIO_PIN_5},
-	{GPIOB, GPIO_PIN_6},
-	{GPIOB, GPIO_PIN_7},
-	{GPIOB, GPIO_PIN_8},
-	{GPIOB, GPIO_PIN_9},
-	{GPIOB, GPIO_PIN_9},
+	{GPIOE, GPIO_PIN_6, KBRD_BTN_UP},
+	{GPIOB, GPIO_PIN_4, KBRD_BTN_DOWN},
+	{GPIOB, GPIO_PIN_5, KBRD_BTN_LEFT},
+	{GPIOB, GPIO_PIN_6, KBRD_BTN_RIGHT},
+	{GPIOB, GPIO_PIN_7, KBRD_BTN_1},
+	{GPIOB, GPIO_PIN_8, KBRD_BTN_2},
+	{GPIOB, GPIO_PIN_9, KBRD_BTN_3},
+	{GPIOB, GPIO_PIN_9, KBRD_BTN_4},
 };
 
 uint32_t getKeyState() {
 	uint32_t keymap = 0;
 	for (uint8_t i = 0; i < KEY_MAP_SIZE; i++) {
 		if (HAL_GPIO_ReadPin(key_map[i].port, key_map[i].pin) == GPIO_PIN_RESET) {
-			keymap |= 1 << i;
+			keymap |= key_map[i].mask;
 		}
 	}
 	return keymap;
 }
-
-

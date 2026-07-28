@@ -60,7 +60,7 @@ Core/Src/menu.c \
 
 # ASM sources
 ASM_SOURCES =  \
-startup_stm32f401xc.s
+../drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f407xx.s
 
 # ASMM sources
 ASMM_SOURCES = 
@@ -75,7 +75,8 @@ ASMMC_SOURCE =
 PREFIX = arm-none-eabi-
 # The gcc compiler bin path can be either defined in make command via GCC_PATH variable (> make GCC_PATH=xxx)
 # either it can be added to the PATH environment variable.
-GCC_PATH=/home/maxi/toolchain/arm-none-eabi/bin
+# Optional toolchain directory. Override with `make GCC_PATH=...` if needed.
+GCC_PATH ?= /opt/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin
 ifdef GCC_PATH
 CC = $(GCC_PATH)/$(PREFIX)gcc
 AS = $(GCC_PATH)/$(PREFIX)gcc -x assembler-with-cpp
@@ -112,7 +113,7 @@ AS_DEFS =
 # C defines
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
--DSTM32F401xC
+-DSTM32F407xx
 
 
 # AS includes
@@ -146,7 +147,7 @@ CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
 # LDFLAGS
 #######################################
 # link script
-LDSCRIPT = STM32F401XX_FLASH.ld
+LDSCRIPT = STM32F407VE_FLASH.ld
 
 # libraries
 LIBS = -lc -lm -lnosys 
