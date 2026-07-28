@@ -98,8 +98,8 @@
 #define LCD_CS_PIN								GPIO_PIN_0
 
 //DATA COMMAND PIN AND PORT, STANDARD GPIO
-#define LCD_DC_PORT								GPIOB
-#define LCD_DC_PIN								GPIO_PIN_2
+#define LCD_DC_PORT								GPIOC
+#define LCD_DC_PIN								GPIO_PIN_6
 
 //RESET PIN AND PORT, STANDARD GPIO
 #define	LCD_RST_PORT							GPIOB
@@ -155,4 +155,3 @@ void ILI9341_Draw_Horizontal_Line_Thickness(uint16_t X, uint16_t Y, uint16_t Wid
 void ILI9341_Draw_Vertical_Line_Thickness(uint16_t X, uint16_t Y, uint16_t Height, uint16_t Colour, uint8_t tick);
 	
 #endif
-

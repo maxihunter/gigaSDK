@@ -25,9 +25,8 @@ endif
 
 C_SOURCES +=  \
 $(MIDDLEWARE_PATH)/keyboard/keyboard.c  \
-$(MIDDLEWARE_PATH)/led/color_values.c \
-$(MIDDLEWARE_PATH)/led/ws2812.c  \
-$(MIDDLEWARE_PATH)/led/ws2812_demos.c \
+$(MIDDLEWARE_PATH)/led/ws2812.c \
+$(MIDDLEWARE_PATH)/rtc/rtc_clock.c \
 $(MIDDLEWARE_PATH)/decoder/mp3/bitstream.c  \
 $(MIDDLEWARE_PATH)/decoder/mp3/buffers.c \
 $(MIDDLEWARE_PATH)/decoder/mp3/dct32.c  \
@@ -62,5 +61,3 @@ AS_INCLUDES =
 # C includes
 C_INCLUDES +=  \
 -I$(MIDDLEWARE_PATH)/include
-
-

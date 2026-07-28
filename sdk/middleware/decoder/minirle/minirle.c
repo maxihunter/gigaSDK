@@ -151,11 +151,11 @@ void minirle_decompress16(const uint16_t *compressed, uint32_t comp_size, uint16
     int header_pos = 0;
 
     while(idx < comp_size) {
-        printf("out_idx= %d(idx: %d) nchar(0x%x:) soutput:\n\r", out_idx, idx, new_p[idx]);
+        //printf("out_idx= %d(idx: %d) nchar(0x%x:) soutput:\n\r", out_idx, idx, new_p[idx]);
         uint16_t code = 1;
         if (out_idx == header_id[header_pos] - 1  ) {
             code = new_p[idx++];
-            printf("POSS FOUND AT %d(%d)==%d [next:%d]  (%x:%c) count = %d\n\r", idx, out_idx, header_id[header_pos], header_id[header_pos+1], new_p[idx], new_p[idx+1], code);
+            //printf("POSS FOUND AT %d(%d)==%d [next:%d]  (%x:%c) count = %d\n\r", idx, out_idx, header_id[header_pos], header_id[header_pos+1], new_p[idx], new_p[idx+1], code);
             header_pos++;
         }
         uint16_t ch = new_p[idx];

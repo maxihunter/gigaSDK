@@ -25,7 +25,6 @@
 #include "ili9341/ILI9341_STM32_Driver.h"
 #include "ili9341/ILI9341_GFX.h"
 #include "keyboard.h"
-#include "led/ws2812.h"
 #include "menu.h"
 #include "bootup.h"
 #include "string.h"
@@ -33,6 +32,8 @@
 #include "test.h"
 #include "test16.h"
 #include "minirle.h"
+#include "rtc/rtc_clock.h"
+#include "led/ws2812.h"
 
 /* USER CODE END Includes */
 
@@ -60,13 +61,12 @@ SPI_HandleTypeDef hspi2;
 DMA_HandleTypeDef hdma_spi2_tx;
 
 TIM_HandleTypeDef htim1;
-DMA_HandleTypeDef hdma_tim1_ch1;
+DMA_HandleTypeDef hdma_tim1_ch2;
 
-UART_HandleTypeDef huart2;
+UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 unsigned int sd_error = 0;
-ws2812_handleTypeDef ws_leds;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -76,7 +76,7 @@ static void MX_DMA_Init(void);
 static void MX_SDIO_SD_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_TIM1_Init(void);
-static void MX_USART2_UART_Init(void);
+static void MX_USART1_UART_Init(void);
 static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
 static void ILI9341_Draw_Splash(void);
@@ -90,7 +90,7 @@ int _write(int file, char *ptr, int len)
     HAL_StatusTypeDef hstatus;
 
     if (file == 1 || file == 2) {
-        hstatus = HAL_UART_Transmit(&huart2, (uint8_t*) ptr, len, HAL_MAX_DELAY);
+        hstatus = HAL_UART_Transmit(&huart1, (uint8_t*) ptr, len, HAL_MAX_DELAY);
         if (hstatus == HAL_OK)
             return len;
         else
@@ -120,20 +120,6 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim) {
     }
 
 }*/
-
-uint16_t pwmData[24] = {0};
-void ws2812_send(uint8_t g, uint8_t r, uint8_t b) {
-    uint32_t color = (g << 16) | (r << 8) | b;
-    for ( int i = 0; i < 24; i++) {
-        if (color & (1 << i)) {
-            pwmData[i] = 60;
-        } else {
-            pwmData[i] = 30;
-        }
-    }
-    HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_2, (uint32_t *)pwmData, 24);
-}
-
 
 /* USER CODE END 0 */
 
@@ -171,11 +157,19 @@ int main(void)
   MX_SPI2_Init();
   MX_FATFS_Init();
   MX_TIM1_Init();
-  MX_USART2_UART_Init();
+  if (WS2812_Init(&htim1, &hdma_tim1_ch2, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  MX_USART1_UART_Init();
   MX_I2S3_Init();
+  if (RTC_Clock_Init() != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-  //HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+  //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
   ILI9341_Init();
   ILI9341_Draw_Splash();
 
@@ -192,38 +186,49 @@ int main(void)
   HAL_Delay(1000);
   //ws2812_init(&ws_leds, &htim1, TIM_CHANNEL_2, 2);
   //ws2812_demos_set(&ws_leds, 1);
-  ws2812_send(50, 200, 50);
-  char dec_data[7000] = {0};
+  WS2812_SetLed1Color(200, 50, 50);
+  WS2812_SetLed2Color(50, 200, 50);
+  uint16_t dec_data[3500] = {0};
 
   printf("===========================================================\n\r");
+  RTC_ClockDateTime current_time;
+  if (RTC_Clock_Get(&current_time) == HAL_OK)
+  {
+    printf("RTC: %04u-%02u-%02u %02u:%02u:%02u\n\r",
+           current_time.year, current_time.month, current_time.day,
+           current_time.hours, current_time.minutes, current_time.seconds);
+  }
   minirle_decompress16(test_file_16, 568, dec_data );
-  printf("%s\n\r", dec_data);
+  printf("MiniRLE16 test data decompressed\n\r");
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   mainMenu_Handler();
+  int port_state;
   while (1)
   {
-    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
     uint32_t keymap =  getKeyState();
     if (keymap) {
         if (keymap & KBRD_BTN_UP) {
             mainMenu_TriggerUp();
+            WS2812_SetLed1Color(200, 0, 0);
         } else
         if (keymap & KBRD_BTN_DOWN) {
             mainMenu_TriggerDown();
+            WS2812_SetLed2Color(200, 0, 0);
         } else
         if (keymap & KBRD_BTN_1) {
             uint8_t item = mainMenu_GetSelectedId() + 1;
         }
         mainMenu_Handler();
-        //HAL_UART_Transmit(&huart2, (uint8_t *) text, strlen(text), 100);
         printf("HAHAHAHAHAHHAHAH keyboard=%i, pin4 = %i\n\r", keymap, 0);
         HAL_Delay(150);
     }
+		port_state = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_6);
     HAL_Delay(50);
-    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
 
     /* USER CODE END WHILE */
 
@@ -249,15 +254,14 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 84;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -458,35 +462,35 @@ static void MX_TIM1_Init(void)
 }
 
 /**
-  * @brief USART2 Initialization Function
+  * @brief USART1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_USART2_UART_Init(void)
+static void MX_USART1_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART2_Init 0 */
+  /* USER CODE BEGIN USART1_Init 0 */
 
-  /* USER CODE END USART2_Init 0 */
+  /* USER CODE END USART1_Init 0 */
 
-  /* USER CODE BEGIN USART2_Init 1 */
+  /* USER CODE BEGIN USART1_Init 1 */
 
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART2_Init 2 */
+  /* USER CODE BEGIN USART1_Init 2 */
 
-  /* USER CODE END USART2_Init 2 */
+  /* USER CODE END USART1_Init 2 */
 
 }
 
@@ -504,9 +508,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream4_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
-  /* DMA2_Stream1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
+  /* DMA2_Stream2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
 
 }
 
@@ -530,10 +534,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_1, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
 
   /*Configure GPIO pin : PE6 */
   GPIO_InitStruct.Pin = GPIO_PIN_6;
@@ -541,8 +548,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB0 PB1 PB2 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2;
+  /*Configure GPIO pins : PB0 PB1 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -554,6 +561,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PD1 */
   GPIO_InitStruct.Pin = GPIO_PIN_1;
@@ -578,7 +592,7 @@ static void MX_GPIO_Init(void)
 
 static void ILI9341_Draw_Splash(void) {
   ILI9341_Fill_Screen(WHITE);
-  
+
   ILI9341_Draw_SmallImage(bootup_logo, 20, 70, 304, 114);
   char buff[20] = {0};
   snprintf(buff, 20, "Bios version: %s", BIOS_VERSION);
@@ -661,7 +675,7 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
-    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
     HAL_Delay(300);
   }
   /* USER CODE END Error_Handler_Debug */

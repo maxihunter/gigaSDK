@@ -254,7 +254,9 @@ static void MP3ClearBadFrame(MP3DecInfo *mp3DecInfo, short *outbuf)
 	for (i = 0; i < mp3DecInfo->nGrans * mp3DecInfo->nGranSamps * mp3DecInfo->nChans; i++)
 		outbuf[i] = 0;
 	*/
-	memset_word(outbuf, 0, (mp3DecInfo->nGrans * mp3DecInfo->nGranSamps * mp3DecInfo->nChans) >> 1);
+	memset(outbuf, 0,
+	       mp3DecInfo->nGrans * mp3DecInfo->nGranSamps *
+	       mp3DecInfo->nChans * sizeof(*outbuf));
 }
 
 /**************************************************************************************
