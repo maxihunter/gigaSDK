@@ -41,6 +41,13 @@ static bool wifi_enabled = true;
 static bool sound_enabled = true;
 static bool storage_automount = true;
 static MenuCallback application_start;
+static int32_t rtc_year = 2026;
+static int32_t rtc_month = 1;
+static int32_t rtc_day = 1;
+static int32_t rtc_hours = 0;
+static int32_t rtc_minutes = 0;
+static int32_t rtc_seconds = 0;
+static char rtc_menu_title[24] = "Date & time";
 
 static void application_dispatch(void)
 {
@@ -54,12 +61,52 @@ static void application_dispatch(void)
 }
 
 static const Menu settings_menu;
+static const Menu rtc_settings_menu;
 static const Menu network_menu;
 static const Menu storage_menu;
 static const Menu media_menu;
 static const Menu about_menu;
 
+static void rtc_editor_read(void)
+{
+    RTC_ClockDateTime date_time;
+
+    if (RTC_Clock_Get(&date_time) == HAL_OK) {
+        rtc_year = date_time.year;
+        rtc_month = date_time.month;
+        rtc_day = date_time.day;
+        rtc_hours = date_time.hours;
+        rtc_minutes = date_time.minutes;
+        rtc_seconds = date_time.seconds;
+        snprintf(rtc_menu_title, sizeof(rtc_menu_title), "Date & time");
+    } else {
+        snprintf(rtc_menu_title, sizeof(rtc_menu_title), "Date/time: read err");
+    }
+}
+
+static void rtc_editor_apply(void)
+{
+    HAL_StatusTypeDef status = RTC_Clock_Set(
+        (uint16_t)rtc_year, (uint8_t)rtc_month, (uint8_t)rtc_day,
+        (uint8_t)rtc_hours, (uint8_t)rtc_minutes, (uint8_t)rtc_seconds);
+
+    snprintf(rtc_menu_title, sizeof(rtc_menu_title),
+             (status == HAL_OK) ? "Date/time: saved" : "Date/time: invalid");
+}
+
+static const MenuItem rtc_settings_items[] = {
+    MENU_INT("Year", &rtc_year, 2000, 2099, 1),
+    MENU_INT("Month", &rtc_month, 1, 12, 1),
+    MENU_INT("Day", &rtc_day, 1, 31, 1),
+    MENU_INT("Hour", &rtc_hours, 0, 23, 1),
+    MENU_INT("Minute", &rtc_minutes, 0, 59, 1),
+    MENU_INT("Second", &rtc_seconds, 0, 59, 1),
+    MENU_ACTION("Read RTC", rtc_editor_read),
+    MENU_ACTION("Apply", rtc_editor_apply),
+};
+
 static const MenuItem settings_items[] = {
+    MENU_SUBMENU("Date & time", &rtc_settings_menu),
     MENU_INT("Brightness", &brightness, 0, 100, 5),
     MENU_INT("Sleep, sec", &sleep_timeout, 0, 300, 10),
 };
@@ -79,6 +126,9 @@ static const MenuItem storage_items[] = {
 
 static const Menu settings_menu = {
     "Settings", settings_items, MENU_ARRAY_SIZE(settings_items)
+};
+static const Menu rtc_settings_menu = {
+    rtc_menu_title, rtc_settings_items, MENU_ARRAY_SIZE(rtc_settings_items)
 };
 static const Menu network_menu = {
     "Network", network_items, MENU_ARRAY_SIZE(network_items)
@@ -262,8 +312,10 @@ void MenuEngine_Draw(void)
     if (full_redraw) {
         ILI9341_Draw_Filled_Rectangle_Coord(MENU_X0, 16U, MENU_X1, 224U,
                                              DARKGREY);
+        ILI9341_Draw_Filled_Rectangle_Coord(MENU_X0, 16U, MENU_X1, 16U+MENU_FIRST_ROW_Y,
+                                             CYAN);
         ILI9341_Draw_Text_Font(menu->title, MENU_TEXT_X, MENU_TITLE_BASELINE,
-                               WHITE, 1, DARKGREY, &FreeSans9pt7b);
+                               BLACK, 1, CYAN, &FreeSans9pt7b);
 
         if (menu->count == 0U) {
             ILI9341_Draw_Text_Font("(empty)", MENU_TEXT_X,
@@ -425,6 +477,7 @@ bool MenuEngine_IsEditing(void)
 void mainMenu_Init(MenuCallback application_callback)
 {
     application_start = application_callback;
+    rtc_editor_read();
     MenuEngine_Init(&root_menu);
 }
 

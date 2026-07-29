@@ -4,6 +4,28 @@
 
 static RTC_HandleTypeDef hrtc;
 
+static uint8_t RTC_Clock_DaysInMonth(uint16_t year, uint8_t month)
+{
+  static const uint8_t days[] = {
+    31U, 28U, 31U, 30U, 31U, 30U, 31U, 31U, 30U, 31U, 30U, 31U
+  };
+  uint8_t result;
+
+  if ((month < 1U) || (month > 12U))
+  {
+    return 0U;
+  }
+
+  result = days[month - 1U];
+  if ((month == 2U) &&
+      (((year % 400U) == 0U) ||
+       (((year % 4U) == 0U) && ((year % 100U) != 0U))))
+  {
+    result = 29U;
+  }
+  return result;
+}
+
 static uint8_t RTC_Clock_Weekday(uint16_t year, uint8_t month, uint8_t day)
 {
   static const uint8_t month_offsets[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
@@ -28,7 +50,7 @@ HAL_StatusTypeDef RTC_Clock_Set(uint16_t year, uint8_t month, uint8_t day,
 
   if ((year < 2000U) || (year > 2099U) ||
       (month < 1U) || (month > 12U) ||
-      (day < 1U) || (day > 31U) ||
+      (day < 1U) || (day > RTC_Clock_DaysInMonth(year, month)) ||
       (hours > 23U) || (minutes > 59U) || (seconds > 59U))
   {
     return HAL_ERROR;
