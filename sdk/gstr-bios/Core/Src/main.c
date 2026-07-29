@@ -81,6 +81,8 @@ static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
 static void ILI9341_Draw_Splash(void);
 static void ILI9341_FPS_Test(void);
+static HAL_StatusTypeDef PCM5102A_TestBeep(void);
+static void BIOS_LaunchApplication(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -172,6 +174,9 @@ int main(void)
   //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
   ILI9341_Init();
   ILI9341_Draw_Splash();
+  
+  WS2812_SetLed1Color(200, 200, 200);
+  WS2812_SetLed2Color(200, 200, 200);
 
   FATFS fs;
   FRESULT res;
@@ -181,13 +186,7 @@ int main(void)
     sd_error = 1;
 	HAL_Delay(2000);
   }
-  //DIR dir;
-  //FILINFO fno;
   HAL_Delay(1000);
-  //ws2812_init(&ws_leds, &htim1, TIM_CHANNEL_2, 2);
-  //ws2812_demos_set(&ws_leds, 1);
-  WS2812_SetLed1Color(200, 50, 50);
-  WS2812_SetLed2Color(50, 200, 50);
   uint16_t dec_data[3500] = {0};
 
   printf("===========================================================\n\r");
@@ -204,27 +203,43 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  mainMenu_Init(BIOS_LaunchApplication);
   mainMenu_Handler();
+  menuHeader_Handler(&current_time, 4);
+  if (PCM5102A_TestBeep() != HAL_OK)
+  {
+    printf("PCM5102A test beep failed\n\r");
+  }
   int port_state;
+  uint32_t previous_keymap = 0U;
   while (1)
   {
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
-    uint32_t keymap =  getKeyState();
-    if (keymap) {
-        if (keymap & KBRD_BTN_UP) {
+    uint32_t keymap = getKeyState();
+    uint32_t pressed_keys = keymap & ~previous_keymap;
+    previous_keymap = keymap;
+
+    if (pressed_keys) {
+        //printf("KEYDOWN=%lx\n\r", (unsigned long)pressed_keys);
+        if (pressed_keys & KBRD_BTN_1) {
+            mainMenu_TriggerSelect();
+        } else
+        if ((pressed_keys & KBRD_BTN_2) || (pressed_keys & KBRD_BTN_MENU)) {
+            mainMenu_TriggerBack();
+        } else
+        if (pressed_keys & KBRD_BTN_UP) {
             mainMenu_TriggerUp();
-            WS2812_SetLed1Color(200, 0, 0);
         } else
-        if (keymap & KBRD_BTN_DOWN) {
+        if (pressed_keys & KBRD_BTN_DOWN) {
             mainMenu_TriggerDown();
-            WS2812_SetLed2Color(200, 0, 0);
         } else
-        if (keymap & KBRD_BTN_1) {
-            uint8_t item = mainMenu_GetSelectedId() + 1;
+        if (pressed_keys & KBRD_BTN_LEFT) {
+            mainMenu_TriggerLeft();
+        } else
+        if (pressed_keys & KBRD_BTN_RIGHT) {
+            mainMenu_TriggerRight();
         }
         mainMenu_Handler();
-        printf("HAHAHAHAHAHHAHAH keyboard=%i, pin4 = %i\n\r", keymap, 0);
-        HAL_Delay(150);
     }
 		port_state = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_6);
     HAL_Delay(50);
@@ -301,7 +316,7 @@ static void MX_I2S3_Init(void)
   hi2s3.Init.Mode = I2S_MODE_MASTER_TX;
   hi2s3.Init.Standard = I2S_STANDARD_PHILIPS;
   hi2s3.Init.DataFormat = I2S_DATAFORMAT_16B;
-  hi2s3.Init.MCLKOutput = I2S_MCLKOUTPUT_DISABLE;
+  hi2s3.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
   hi2s3.Init.AudioFreq = I2S_AUDIOFREQ_22K;
   hi2s3.Init.CPOL = I2S_CPOL_LOW;
   hi2s3.Init.ClockSource = I2S_CLOCK_PLL;
@@ -589,6 +604,113 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+static HAL_StatusTypeDef PCM5102A_TestBeep(void)
+{
+  enum {
+    block_frames = 128
+  };
+  static const uint16_t tone_frequencies[] = {500, 1000, 2000};
+  static const int16_t sine_table[32] = {
+       0,  1171,  2296,  3333,  4243,  4989,  5543,  5885,
+    6000,  5885,  5543,  4989,  4243,  3333,  2296,  1171,
+       0, -1171, -2296, -3333, -4243, -4989, -5543, -5885,
+   -6000, -5885, -5543, -4989, -4243, -3333, -2296, -1171
+  };
+  uint16_t audio_buffer[block_frames * 2];
+  uint32_t i2s_clock = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2S);
+  uint32_t prescaler = 2U * (SPI3->I2SPR & SPI_I2SPR_I2SDIV);
+
+  if ((SPI3->I2SPR & SPI_I2SPR_ODD) != 0U) {
+    prescaler++;
+  }
+  if ((i2s_clock == 0U) || (prescaler == 0U)) {
+    return HAL_ERROR;
+  }
+
+  uint32_t sample_rate = i2s_clock / (256U * prescaler);
+  uint32_t duration_frames = sample_rate / 4U;
+  uint32_t gap_frames = sample_rate / 10U;
+  uint32_t fade_frames = sample_rate / 200U;
+
+  printf("I2S: clock=%lu Hz, sample_rate=%lu Hz, prescaler=%lu\n\r",
+         (unsigned long)i2s_clock, (unsigned long)sample_rate,
+         (unsigned long)prescaler);
+
+  for (uint32_t tone = 0;
+       tone < (sizeof(tone_frequencies) / sizeof(tone_frequencies[0]));
+       tone++)
+  {
+    uint32_t phase = 0;
+    uint32_t phase_step =
+        (uint32_t)(((uint64_t)tone_frequencies[tone] << 32) / sample_rate);
+
+    for (uint32_t frame = 0; frame < duration_frames; frame += block_frames)
+    {
+      uint32_t frames_in_block = duration_frames - frame;
+      if (frames_in_block > block_frames) {
+        frames_in_block = block_frames;
+      }
+
+      for (uint32_t i = 0; i < frames_in_block; i++)
+      {
+        uint32_t current_frame = frame + i;
+        uint32_t gain = fade_frames;
+
+        if (current_frame < fade_frames) {
+          gain = current_frame;
+        } else if ((duration_frames - current_frame) <= fade_frames) {
+          gain = duration_frames - current_frame - 1;
+        }
+
+        int32_t sample = sine_table[phase >> 27] * 4;
+        sample = (sample * (int32_t)gain) / fade_frames;
+        phase += phase_step;
+
+        audio_buffer[i * 2] = (uint16_t)(int16_t)sample;
+        audio_buffer[(i * 2) + 1] = (uint16_t)(int16_t)sample;
+      }
+
+      HAL_StatusTypeDef status = HAL_I2S_Transmit(
+          &hi2s3, audio_buffer, (uint16_t)(frames_in_block * 2), HAL_MAX_DELAY);
+      if (status != HAL_OK) {
+        return status;
+      }
+    }
+
+    memset(audio_buffer, 0, sizeof(audio_buffer));
+    for (uint32_t frame = 0; frame < gap_frames; frame += block_frames)
+    {
+      uint32_t frames_in_block = gap_frames - frame;
+      if (frames_in_block > block_frames) {
+        frames_in_block = block_frames;
+      }
+
+      HAL_StatusTypeDef status = HAL_I2S_Transmit(
+          &hi2s3, audio_buffer, (uint16_t)(frames_in_block * 2), HAL_MAX_DELAY);
+      if (status != HAL_OK) {
+        return status;
+      }
+    }
+  }
+
+  return HAL_OK;
+}
+
+/*
+ * Application menu callbacks own the device after launch and must not return.
+ * Replace this placeholder loop with the application entry point.
+ */
+static void BIOS_LaunchApplication(void)
+{
+  ILI9341_Fill_Screen(BLACK);
+  ILI9341_Draw_Text("Application started", 50, 110, WHITE, 2, BLACK);
+
+  while (1)
+  {
+    /* Application main loop. */
+  }
+}
 
 static void ILI9341_Draw_Splash(void) {
   ILI9341_Fill_Screen(WHITE);

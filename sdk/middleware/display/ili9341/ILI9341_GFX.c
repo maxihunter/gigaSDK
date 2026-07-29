@@ -270,6 +270,91 @@ void ILI9341_Draw_Text(const char* Text, uint8_t X, uint8_t Y, uint16_t Colour, 
     }
 }
 
+/*
+ * Draw one character from an Adafruit GFX font.  Y is the font baseline.
+ * Characters outside the range stored in Font are ignored.
+ */
+void ILI9341_Draw_Char_Font(char Character, uint16_t X, uint16_t Y, uint16_t Colour,
+                            uint16_t Size, uint16_t Background_Colour, const GFXfont *Font)
+{
+    uint8_t character = (uint8_t)Character;
+    const GFXglyph *glyph;
+    const uint8_t *bitmap;
+    uint16_t bitmap_offset;
+    uint8_t bits = 0;
+    uint8_t bit = 0;
+
+    if ((Font == NULL) || (Size == 0) ||
+        (character < Font->first) || (character > Font->last)) {
+        return;
+    }
+
+    glyph = &Font->glyph[character - Font->first];
+    bitmap = Font->bitmap;
+    bitmap_offset = glyph->bitmapOffset;
+
+    for (uint8_t row = 0; row < glyph->height; row++) {
+        for (uint8_t column = 0; column < glyph->width; column++) {
+            int32_t pixel_x;
+            int32_t pixel_y;
+            uint16_t pixel_colour;
+
+            if ((bit & 7U) == 0U) {
+                bits = bitmap[bitmap_offset++];
+            }
+            pixel_colour = (bits & 0x80U) ? Colour : Background_Colour;
+            bits <<= 1;
+            bit++;
+
+            pixel_x = (int32_t)X + ((int32_t)glyph->xOffset + column) * Size;
+            pixel_y = (int32_t)Y + ((int32_t)glyph->yOffset + row) * Size;
+            if ((pixel_x < 0) || (pixel_y < 0)) {
+                continue;
+            }
+
+            if (Size == 1) {
+                ILI9341_Draw_Pixel((uint16_t)pixel_x, (uint16_t)pixel_y, pixel_colour);
+            } else {
+                ILI9341_Draw_Rectangle((uint16_t)pixel_x, (uint16_t)pixel_y,
+                                       Size, Size, pixel_colour);
+            }
+        }
+    }
+}
+
+/*
+ * Draw text with any GFXfont, including the fonts from middleware/include/fonts.
+ * X is the left cursor position and Y is the baseline.  Size 1 uses the font's
+ * native size; larger values scale it by an integer factor.
+ */
+void ILI9341_Draw_Text_Font(const char *Text, uint16_t X, uint16_t Y, uint16_t Colour,
+                            uint16_t Size, uint16_t Background_Colour, const GFXfont *Font)
+{
+    uint16_t line_start = X;
+
+    if ((Text == NULL) || (Font == NULL) || (Size == 0)) {
+        return;
+    }
+
+    while (*Text != '\0') {
+        uint8_t character = (uint8_t)*Text++;
+
+        if (character == '\n') {
+            X = line_start;
+            Y += (uint16_t)Font->yAdvance * Size;
+            continue;
+        }
+
+        if ((character < Font->first) || (character > Font->last)) {
+            continue;
+        }
+
+        ILI9341_Draw_Char_Font((char)character, X, Y, Colour, Size,
+                               Background_Colour, Font);
+        X += (uint16_t)Font->glyph[character - Font->first].xAdvance * Size;
+    }
+}
+
 /*Draws a full screen picture from flash. Image converted from RGB .jpeg/other to C array using online converter*/
 //USING CONVERTER: http://www.digole.com/tools/PicturetoC_Hex_converter.php
 //65K colour (2Bytes / Pixel)
