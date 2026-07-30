@@ -12,6 +12,7 @@
 
 DISPLAY = ILI9341_320_240
 PLATFORM = STM32F4
+VIDEO_FPS_OVERLAY ?= 1
 ######################################
 # target
 ######################################
@@ -113,7 +114,8 @@ AS_DEFS =
 # C defines
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
--DSTM32F407xx
+-DSTM32F407xx \
+-DVIDEO_FPS_OVERLAY=$(VIDEO_FPS_OVERLAY)
 
 
 # AS includes
@@ -135,7 +137,7 @@ ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffuncti
 CFLAGS += $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
 
 ifeq ($(DEBUG), 1)
-CFLAGS += -g -gdwarf-2
+CFLAGS += -g -gdwarf-2 -DAUDIO_ERROR_DIAGNOSTICS
 endif
 
 
@@ -191,7 +193,7 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	$(BIN) $< $@	
 	
 $(BUILD_DIR):
-	mkdir $@		
+	mkdir -p $@
 
 #######################################
 # clean up

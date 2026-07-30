@@ -34,6 +34,8 @@
 #include "minirle.h"
 #include "rtc/rtc_clock.h"
 #include "led/ws2812.h"
+#include "audio/audio.h"
+#include "video/video.h"
 
 /* USER CODE END Includes */
 
@@ -44,7 +46,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+/* Raw PCM played at boot, prepared with sdk/tools/audio-to-pcm.sh. */
+#define BIOS_MUSIC_FILE "music.pcm"
+#define BIOS_MUSIC_FILE_IMA "theme.gim"
+#define BIOS_INTRO_VIDEO_FILE "intro.vid"
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,6 +59,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2S_HandleTypeDef hi2s3;
+DMA_HandleTypeDef hdma_spi3_tx;
 
 SD_HandleTypeDef hsd;
 
@@ -81,7 +87,8 @@ static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
 static void ILI9341_Draw_Splash(void);
 static void ILI9341_FPS_Test(void);
-static HAL_StatusTypeDef PCM5102A_TestBeep(void);
+static uint8_t BIOS_AudioAbortRequested(void);
+static void BIOS_VideoServiceAudio(void);
 static void BIOS_LaunchApplication(void);
 /* USER CODE END PFP */
 
@@ -165,6 +172,10 @@ int main(void)
   }
   MX_USART1_UART_Init();
   MX_I2S3_Init();
+  if (Audio_Init(&hi2s3, BIOS_AudioAbortRequested) != HAL_OK)
+  {
+    Error_Handler();
+  }
   if (RTC_Clock_Init() != HAL_OK)
   {
     Error_Handler();
@@ -173,6 +184,12 @@ int main(void)
   HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
   //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
   ILI9341_Init();
+  if (Video_Init(&hspi2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  ILI9341_FPS_Test();
+  HAL_Delay(5000);
   ILI9341_Draw_Splash();
   
   WS2812_SetLed1Color(200, 200, 200);
@@ -206,14 +223,56 @@ int main(void)
   mainMenu_Init(BIOS_LaunchApplication);
   mainMenu_Handler();
   menuHeader_Handler(&current_time, 4);
-  if (PCM5102A_TestBeep() != HAL_OK)
+  
+  WS2812_SetLed1Color(0, 0, 0);
+  WS2812_SetLed2Color(0, 0, 0);
+
+  Audio_ClockInfo audio_clock;
+  if (Audio_GetClockInfo(&audio_clock) == HAL_OK)
+  {
+    printf("I2S: clock=%lu Hz, sample_rate=%lu Hz, bclk=%lu Hz, prescaler=%lu\n\r",
+           (unsigned long)audio_clock.i2s_clock,
+           (unsigned long)audio_clock.sample_rate,
+           (unsigned long)audio_clock.bit_clock,
+           (unsigned long)audio_clock.prescaler);
+  }
+  if (Audio_PlayTestBeep() != HAL_OK)
   {
     printf("PCM5102A test beep failed\n\r");
+  }
+  if (sd_error == 0)
+  {
+    //printf("PCM: playing %s\n\r", BIOS_MUSIC_FILE);
+    //if (Audio_PlayPcmFile(BIOS_MUSIC_FILE) != HAL_OK)
+    printf("Mixer: playing %s\n\r", BIOS_MUSIC_FILE_IMA);
+    if (Audio_MixerStartImaAdpcmMusic(BIOS_MUSIC_FILE_IMA, 1U) != HAL_OK)
+    {
+      printf("Mixer: playback of %s failed\n\r", BIOS_MUSIC_FILE_IMA);
+    }
+    else
+    {
+      printf("Video: playing %s\n\r", BIOS_INTRO_VIDEO_FILE);
+      if (Video_PlayFile(BIOS_INTRO_VIDEO_FILE,
+                         BIOS_VideoServiceAudio, NULL) != HAL_OK)
+      {
+        printf("Video: playback of %s failed\n\r", BIOS_INTRO_VIDEO_FILE);
+      }
+
+      /* Restore the BIOS interface after the last video frame. */
+      mainMenu_Handler();
+      menuHeader_Handler(&current_time, 4);
+    }
   }
   int port_state;
   uint32_t previous_keymap = 0U;
   while (1)
   {
+    if (Audio_MixerIsRunning() && (Audio_MixerProcess() != HAL_OK))
+    {
+      printf("Mixer: stream error\n\r");
+      (void)Audio_MixerStop();
+    }
+
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
     uint32_t keymap = getKeyState();
     uint32_t pressed_keys = keymap & ~previous_keymap;
@@ -242,7 +301,7 @@ int main(void)
         mainMenu_Handler();
     }
 		port_state = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_6);
-    HAL_Delay(50);
+    HAL_Delay(5);
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
 
     /* USER CODE END WHILE */
@@ -273,8 +332,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
   RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -315,8 +374,10 @@ static void MX_I2S3_Init(void)
   hi2s3.Instance = SPI3;
   hi2s3.Init.Mode = I2S_MODE_MASTER_TX;
   hi2s3.Init.Standard = I2S_STANDARD_PHILIPS;
-  hi2s3.Init.DataFormat = I2S_DATAFORMAT_16B;
-  hi2s3.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
+  /* 16-bit samples in 32-bit channel frames: the resulting 64 fS bit clock is
+     the lowest rate the PCM5102A PLL accepts at this sample rate. */
+  hi2s3.Init.DataFormat = I2S_DATAFORMAT_16B_EXTENDED;
+  hi2s3.Init.MCLKOutput = I2S_MCLKOUTPUT_DISABLE;
   hi2s3.Init.AudioFreq = I2S_AUDIOFREQ_22K;
   hi2s3.Init.CPOL = I2S_CPOL_LOW;
   hi2s3.Init.ClockSource = I2S_CLOCK_PLL;
@@ -523,6 +584,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream4_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
   /* DMA2_Stream2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
@@ -557,8 +621,8 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
 
-  /*Configure GPIO pin : PE6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  /*Configure GPIO pins : PE6 PE7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
@@ -590,10 +654,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB4 PB5 PB6 PB7
-                           PB8 PB9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7
-                          |GPIO_PIN_8|GPIO_PIN_9;
+  /*Configure GPIO pins : PB4 PB6 PB7 PB8
+                           PB9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8
+                          |GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -605,96 +669,19 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-static HAL_StatusTypeDef PCM5102A_TestBeep(void)
+/* Any key stops the boot audio so that a long file cannot hold up the BIOS. */
+static uint8_t BIOS_AudioAbortRequested(void)
 {
-  enum {
-    block_frames = 128
-  };
-  static const uint16_t tone_frequencies[] = {500, 1000, 2000};
-  static const int16_t sine_table[32] = {
-       0,  1171,  2296,  3333,  4243,  4989,  5543,  5885,
-    6000,  5885,  5543,  4989,  4243,  3333,  2296,  1171,
-       0, -1171, -2296, -3333, -4243, -4989, -5543, -5885,
-   -6000, -5885, -5543, -4989, -4243, -3333, -2296, -1171
-  };
-  uint16_t audio_buffer[block_frames * 2];
-  uint32_t i2s_clock = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2S);
-  uint32_t prescaler = 2U * (SPI3->I2SPR & SPI_I2SPR_I2SDIV);
+  return (getKeyState() != 0U) ? 1U : 0U;
+}
 
-  if ((SPI3->I2SPR & SPI_I2SPR_ODD) != 0U) {
-    prescaler++;
-  }
-  if ((i2s_clock == 0U) || (prescaler == 0U)) {
-    return HAL_ERROR;
-  }
-
-  uint32_t sample_rate = i2s_clock / (256U * prescaler);
-  uint32_t duration_frames = sample_rate / 4U;
-  uint32_t gap_frames = sample_rate / 10U;
-  uint32_t fade_frames = sample_rate / 200U;
-
-  printf("I2S: clock=%lu Hz, sample_rate=%lu Hz, prescaler=%lu\n\r",
-         (unsigned long)i2s_clock, (unsigned long)sample_rate,
-         (unsigned long)prescaler);
-
-  for (uint32_t tone = 0;
-       tone < (sizeof(tone_frequencies) / sizeof(tone_frequencies[0]));
-       tone++)
+/* Keep the I2S DMA mixer filled while video data is streamed from FatFs. */
+static void BIOS_VideoServiceAudio(void)
+{
+  if (Audio_MixerIsRunning() && (Audio_MixerProcess() != HAL_OK))
   {
-    uint32_t phase = 0;
-    uint32_t phase_step =
-        (uint32_t)(((uint64_t)tone_frequencies[tone] << 32) / sample_rate);
-
-    for (uint32_t frame = 0; frame < duration_frames; frame += block_frames)
-    {
-      uint32_t frames_in_block = duration_frames - frame;
-      if (frames_in_block > block_frames) {
-        frames_in_block = block_frames;
-      }
-
-      for (uint32_t i = 0; i < frames_in_block; i++)
-      {
-        uint32_t current_frame = frame + i;
-        uint32_t gain = fade_frames;
-
-        if (current_frame < fade_frames) {
-          gain = current_frame;
-        } else if ((duration_frames - current_frame) <= fade_frames) {
-          gain = duration_frames - current_frame - 1;
-        }
-
-        int32_t sample = sine_table[phase >> 27] * 4;
-        sample = (sample * (int32_t)gain) / fade_frames;
-        phase += phase_step;
-
-        audio_buffer[i * 2] = (uint16_t)(int16_t)sample;
-        audio_buffer[(i * 2) + 1] = (uint16_t)(int16_t)sample;
-      }
-
-      HAL_StatusTypeDef status = HAL_I2S_Transmit(
-          &hi2s3, audio_buffer, (uint16_t)(frames_in_block * 2), HAL_MAX_DELAY);
-      if (status != HAL_OK) {
-        return status;
-      }
-    }
-
-    memset(audio_buffer, 0, sizeof(audio_buffer));
-    for (uint32_t frame = 0; frame < gap_frames; frame += block_frames)
-    {
-      uint32_t frames_in_block = gap_frames - frame;
-      if (frames_in_block > block_frames) {
-        frames_in_block = block_frames;
-      }
-
-      HAL_StatusTypeDef status = HAL_I2S_Transmit(
-          &hi2s3, audio_buffer, (uint16_t)(frames_in_block * 2), HAL_MAX_DELAY);
-      if (status != HAL_OK) {
-        return status;
-      }
-    }
+    (void)Audio_MixerStop();
   }
-
-  return HAL_OK;
 }
 
 /*
