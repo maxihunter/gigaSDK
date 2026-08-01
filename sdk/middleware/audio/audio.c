@@ -200,43 +200,74 @@ static HAL_StatusTypeDef Audio_Play(Audio_FillHalf fill, uint32_t timeout_ms)
   return status;
 }
 
-/* ---------------------------------------------------------------- test beep */
+/* --------------------------------------------------------- boot test jingle */
 
-#define AUDIO_BEEP_TONE_COUNT 3U
+#define AUDIO_JINGLE_VOICES 3U
 
-/* One sine period over 32 entries; sampled with linear interpolation and scaled
-   to about 73 % of full scale, so the coarse table costs no audible harmonics. */
-static const int16_t audio_sine_table[32] = {
-     0,  1171,  2296,  3333,  4243,  4989,  5543,  5885,
-  6000,  5885,  5543,  4989,  4243,  3333,  2296,  1171,
-     0, -1171, -2296, -3333, -4243, -4989, -5543, -5885,
- -6000, -5885, -5543, -4989, -4243, -3333, -2296, -1171
+typedef struct
+{
+  uint16_t frequency[AUDIO_JINGLE_VOICES];
+  uint16_t duration_ms;
+  uint16_t gap_ms;
+} Audio_JingleNote;
+
+/* An original handheld-style arpeggio ending in two small chords. All voices
+   use the same pulse instrument; simultaneous notes provide pseudo-polyphony. */
+static const Audio_JingleNote audio_jingle_notes[] = {
+  { { 523U,    0U,    0U },  90U, 12U }, /* C5  */
+  { { 659U,    0U,    0U },  90U, 12U }, /* E5  */
+  { { 784U,    0U,    0U },  90U, 12U }, /* G5  */
+  { { 1047U,   0U,    0U }, 150U, 18U }, /* C6  */
+  { { 784U,  988U, 1175U }, 170U, 20U }, /* G5-B5-D6 */
+  { { 1047U, 1319U, 1568U }, 430U,  0U }, /* C6-E6-G6 */
 };
-static const uint16_t audio_beep_frequencies[AUDIO_BEEP_TONE_COUNT] = {
-  500U, 1000U, 2000U
-};
+#define AUDIO_JINGLE_NOTE_COUNT \
+  (sizeof(audio_jingle_notes) / sizeof(audio_jingle_notes[0]))
 
 static struct
 {
   uint32_t sample_rate;
-  uint32_t tone_frames;
+  uint32_t note_frames;
   uint32_t gap_frames;
-  uint32_t fade_frames;
-  uint32_t tone;
+  uint32_t attack_frames;
+  uint32_t release_frames;
+  uint32_t note;
   uint32_t frame;
-  uint32_t phase;
-  uint32_t phase_step;
+  uint32_t phase[AUDIO_JINGLE_VOICES];
+  uint32_t phase_step[AUDIO_JINGLE_VOICES];
   uint8_t in_gap;
 } audio_beep;
 
-static uint32_t Audio_BeepPhaseStep(uint32_t frequency)
+static uint32_t Audio_JinglePhaseStep(uint32_t frequency)
 {
+  if (frequency == 0U)
+  {
+    return 0U;
+  }
   return (uint32_t)(((uint64_t)frequency << 32) / audio_beep.sample_rate);
+}
+
+static void Audio_JingleBeginNote(void)
+{
+  const Audio_JingleNote *note = &audio_jingle_notes[audio_beep.note];
+
+  audio_beep.frame = 0U;
+  audio_beep.in_gap = 0U;
+  audio_beep.note_frames =
+      ((uint32_t)note->duration_ms * audio_beep.sample_rate) / 1000U;
+  audio_beep.gap_frames =
+      ((uint32_t)note->gap_ms * audio_beep.sample_rate) / 1000U;
+  for (uint32_t voice = 0U; voice < AUDIO_JINGLE_VOICES; voice++)
+  {
+    audio_beep.phase[voice] = 0U;
+    audio_beep.phase_step[voice] =
+        Audio_JinglePhaseStep(note->frequency[voice]);
+  }
 }
 
 static int16_t Audio_BeepNextSample(void)
 {
-  if (audio_beep.tone >= AUDIO_BEEP_TONE_COUNT)
+  if (audio_beep.note >= AUDIO_JINGLE_NOTE_COUNT)
   {
     return 0;
   }
@@ -246,43 +277,60 @@ static int16_t Audio_BeepNextSample(void)
     audio_beep.frame++;
     if (audio_beep.frame >= audio_beep.gap_frames)
     {
-      audio_beep.tone++;
-      audio_beep.in_gap = 0U;
-      audio_beep.frame = 0U;
-      audio_beep.phase = 0U;
-      if (audio_beep.tone < AUDIO_BEEP_TONE_COUNT)
+      audio_beep.note++;
+      if (audio_beep.note < AUDIO_JINGLE_NOTE_COUNT)
       {
-        audio_beep.phase_step =
-            Audio_BeepPhaseStep(audio_beep_frequencies[audio_beep.tone]);
+        Audio_JingleBeginNote();
       }
     }
     return 0;
   }
 
-  uint32_t index = audio_beep.phase >> 27;
-  int32_t lower = audio_sine_table[index];
-  int32_t upper = audio_sine_table[(index + 1U) & 31U];
-  int32_t fraction = (int32_t)((audio_beep.phase >> 11) & 0xFFFFU);
-  int32_t sample = (lower + (((upper - lower) * fraction) >> 16)) * 4;
-
-  uint32_t remaining = audio_beep.tone_frames - audio_beep.frame;
-  uint32_t gain = audio_beep.fade_frames;
-  if (audio_beep.frame < audio_beep.fade_frames)
+  /* 25 % pulse waves keep the sound recognisably retro. Lower chord voices
+     are deliberately quieter so the melody remains easy to hear. */
+  static const int16_t voice_levels[AUDIO_JINGLE_VOICES] = {
+    6200, 3500, 2600
+  };
+  int32_t sample = 0;
+  for (uint32_t voice = 0U; voice < AUDIO_JINGLE_VOICES; voice++)
   {
-    gain = audio_beep.frame;
+    if (audio_beep.phase_step[voice] != 0U)
+    {
+      sample += ((audio_beep.phase[voice] >> 30U) == 0U) ?
+                voice_levels[voice] : -voice_levels[voice];
+      audio_beep.phase[voice] += audio_beep.phase_step[voice];
+    }
   }
-  else if (remaining <= audio_beep.fade_frames)
-  {
-    gain = remaining - 1U;
-  }
-  sample = (sample * (int32_t)gain) / (int32_t)audio_beep.fade_frames;
 
-  audio_beep.phase += audio_beep.phase_step;
+  uint32_t remaining = audio_beep.note_frames - audio_beep.frame;
+  uint32_t gain = 32767U;
+  if (audio_beep.frame < audio_beep.attack_frames)
+  {
+    gain = (audio_beep.frame * 32767U) / audio_beep.attack_frames;
+  }
+  if (remaining <= audio_beep.release_frames)
+  {
+    uint32_t release_gain = ((remaining - 1U) * 32767U) /
+                            audio_beep.release_frames;
+    if (release_gain < gain)
+    {
+      gain = release_gain;
+    }
+  }
+  sample = (sample * (int32_t)gain) / 32767;
+
   audio_beep.frame++;
-  if (audio_beep.frame >= audio_beep.tone_frames)
+  if (audio_beep.frame >= audio_beep.note_frames)
   {
-    audio_beep.in_gap = 1U;
-    audio_beep.frame = 0U;
+    if (audio_beep.gap_frames != 0U)
+    {
+      audio_beep.in_gap = 1U;
+      audio_beep.frame = 0U;
+    }
+    else
+    {
+      audio_beep.note++;
+    }
   }
 
   return (int16_t)sample;
@@ -297,7 +345,7 @@ static uint8_t Audio_BeepFillHalf(uint16_t *half)
     half[(frame * 2U) + 1U] = sample;
   }
 
-  return (audio_beep.tone < AUDIO_BEEP_TONE_COUNT) ? 1U : 0U;
+  return (audio_beep.note < AUDIO_JINGLE_NOTE_COUNT) ? 1U : 0U;
 }
 
 HAL_StatusTypeDef Audio_PlayTestBeep(void)
@@ -311,18 +359,24 @@ HAL_StatusTypeDef Audio_PlayTestBeep(void)
 
   memset(&audio_beep, 0, sizeof(audio_beep));
   audio_beep.sample_rate = info.sample_rate;
-  audio_beep.tone_frames = info.sample_rate / 4U;
-  audio_beep.gap_frames = info.sample_rate / 10U;
-  audio_beep.fade_frames = info.sample_rate / 200U;
-  if (audio_beep.fade_frames == 0U)
+  audio_beep.attack_frames = info.sample_rate / 250U;  /* 4 ms */
+  audio_beep.release_frames = info.sample_rate / 55U;  /* about 18 ms */
+  if (audio_beep.attack_frames == 0U)
   {
-    audio_beep.fade_frames = 1U;
+    audio_beep.attack_frames = 1U;
   }
-  audio_beep.phase_step = Audio_BeepPhaseStep(audio_beep_frequencies[0]);
+  if (audio_beep.release_frames == 0U)
+  {
+    audio_beep.release_frames = 1U;
+  }
+  Audio_JingleBeginNote();
 
-  uint32_t total_ms = (AUDIO_BEEP_TONE_COUNT *
-                       (audio_beep.tone_frames + audio_beep.gap_frames) * 1000U) /
-                      info.sample_rate;
+  uint32_t total_ms = 0U;
+  for (uint32_t note = 0U; note < AUDIO_JINGLE_NOTE_COUNT; note++)
+  {
+    total_ms += audio_jingle_notes[note].duration_ms +
+                audio_jingle_notes[note].gap_ms;
+  }
 
   return Audio_Play(Audio_BeepFillHalf, total_ms + 500U);
 }

@@ -25,7 +25,10 @@ TARGET = gstr-bios
 # debug build?
 DEBUG = 1
 # optimization
-OPT = -Og
+OPT = -Os
+
+ROM_S = 524288
+RAM_S = 196608
 
 #######################################
 # paths
@@ -191,6 +194,8 @@ $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	
 $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	$(BIN) $< $@	
+	$(shell $(SZ) $(BUILD_DIR)/$(TARGET).elf > memory)
+	@python3 print_mem.py $(ROM_S) $(RAM_S)
 	
 $(BUILD_DIR):
 	mkdir -p $@

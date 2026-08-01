@@ -3,8 +3,8 @@
 #define WS2812_LED_COUNT       2U
 #define WS2812_BITS_PER_LED   24U
 #define WS2812_RESET_SLOTS    48U
-#define WS2812_PWM_ZERO       30U
-#define WS2812_PWM_ONE        60U
+#define WS2812_PWM_ZERO       60U
+#define WS2812_PWM_ONE       120U
 
 static TIM_HandleTypeDef *ws2812_timer;
 static DMA_HandleTypeDef *ws2812_dma;

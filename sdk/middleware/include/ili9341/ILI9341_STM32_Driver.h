@@ -91,7 +91,7 @@
 #define ILI9341_SCREEN_WIDTH 	320
 
 //SPI INSTANCE
-#define HSPI_INSTANCE							&hspi2
+#define HSPI_INSTANCE							&hspi1
 
 //CHIP SELECT PIN AND PORT, STANDARD GPIO
 #define LCD_CS_PORT								GPIOB
@@ -146,6 +146,17 @@ void ILI9341_Fill_Screen(uint16_t Colour);
 void ILI9341_Draw_Colour(uint16_t Colour);
 void ILI9341_Draw_Pixel(uint16_t X,uint16_t Y,uint16_t Colour);
 void ILI9341_Draw_Colour_Burst(uint16_t Colour, uint32_t Size);
+
+/*
+ * Raw pixel streaming into the window opened by ILI9341_Set_Address.
+ * Chip select stays asserted between Begin and End so the controller keeps
+ * filling the same window, which allows a caller to compose one scanline at a
+ * time and push it without re-sending the address for every row.
+ * Data must be RGB565 with the high byte first.
+ */
+void ILI9341_Begin_Pixel_Stream(void);
+void ILI9341_Stream_Pixels(const uint8_t *Data, uint16_t Size);
+void ILI9341_End_Pixel_Stream(void);
 
 
 void ILI9341_Draw_Rectangle(uint16_t X, uint16_t Y, uint16_t Width, uint16_t Height, uint16_t Colour);

@@ -24,9 +24,9 @@
 /* USER CODE BEGIN Includes */
 #include "ili9341/ILI9341_STM32_Driver.h"
 #include "ili9341/ILI9341_GFX.h"
+#include "fonts/FreeSansBold24pt7b.h"
 #include "keyboard.h"
 #include "menu.h"
-#include "bootup.h"
 #include "string.h"
 #include <stdio.h>
 #include "test.h"
@@ -63,8 +63,8 @@ DMA_HandleTypeDef hdma_spi3_tx;
 
 SD_HandleTypeDef hsd;
 
-SPI_HandleTypeDef hspi2;
-DMA_HandleTypeDef hdma_spi2_tx;
+SPI_HandleTypeDef hspi1;
+DMA_HandleTypeDef hdma_spi1_tx;
 
 TIM_HandleTypeDef htim1;
 DMA_HandleTypeDef hdma_tim1_ch2;
@@ -80,12 +80,13 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_SDIO_SD_Init(void);
-static void MX_SPI2_Init(void);
+static void MX_SPI1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
 static void ILI9341_Draw_Splash(void);
+static void ILI9341_Draw_Logo(void);
 static void ILI9341_FPS_Test(void);
 static uint8_t BIOS_AudioAbortRequested(void);
 static void BIOS_VideoServiceAudio(void);
@@ -163,7 +164,7 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_SDIO_SD_Init();
-  MX_SPI2_Init();
+  MX_SPI1_Init();
   MX_FATFS_Init();
   MX_TIM1_Init();
   if (WS2812_Init(&htim1, &hdma_tim1_ch2, TIM_CHANNEL_2) != HAL_OK)
@@ -184,14 +185,20 @@ int main(void)
   HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
   //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
   ILI9341_Init();
-  if (Video_Init(&hspi2) != HAL_OK)
+  if (Video_Init(&hspi1) != HAL_OK)
   {
     Error_Handler();
   }
+#ifdef DISPLAY_FPS_TEST
   ILI9341_FPS_Test();
   HAL_Delay(5000);
+#endif
   ILI9341_Draw_Splash();
-  
+  if (Audio_PlayTestBeep() != HAL_OK)
+  {
+    printf("PCM5102A test beep failed\n\r");
+  }
+  HAL_Delay(500U);
   WS2812_SetLed1Color(200, 200, 200);
   WS2812_SetLed2Color(200, 200, 200);
 
@@ -201,7 +208,7 @@ int main(void)
   if (res != FR_OK) {
     ILI9341_Draw_Text("SD Card not found", 60, 220, RED, 2, BLACK);
     sd_error = 1;
-	HAL_Delay(2000);
+	  HAL_Delay(2000);
   }
   HAL_Delay(1000);
   uint16_t dec_data[3500] = {0};
@@ -223,7 +230,7 @@ int main(void)
   mainMenu_Init(BIOS_LaunchApplication);
   mainMenu_Handler();
   menuHeader_Handler(&current_time, 4);
-  
+
   WS2812_SetLed1Color(0, 0, 0);
   WS2812_SetLed2Color(0, 0, 0);
 
@@ -236,12 +243,10 @@ int main(void)
            (unsigned long)audio_clock.bit_clock,
            (unsigned long)audio_clock.prescaler);
   }
-  if (Audio_PlayTestBeep() != HAL_OK)
-  {
-    printf("PCM5102A test beep failed\n\r");
-  }
+  
   if (sd_error == 0)
   {
+    #if 1
     //printf("PCM: playing %s\n\r", BIOS_MUSIC_FILE);
     //if (Audio_PlayPcmFile(BIOS_MUSIC_FILE) != HAL_OK)
     printf("Mixer: playing %s\n\r", BIOS_MUSIC_FILE_IMA);
@@ -250,10 +255,11 @@ int main(void)
       printf("Mixer: playback of %s failed\n\r", BIOS_MUSIC_FILE_IMA);
     }
     else
+    #endif
     {
       printf("Video: playing %s\n\r", BIOS_INTRO_VIDEO_FILE);
-      if (Video_PlayFile(BIOS_INTRO_VIDEO_FILE,
-                         BIOS_VideoServiceAudio, NULL) != HAL_OK)
+      //if (Video_PlayFile(BIOS_INTRO_VIDEO_FILE,
+      //                   BIOS_VideoServiceAudio, NULL) != HAL_OK)
       {
         printf("Video: playback of %s failed\n\r", BIOS_INTRO_VIDEO_FILE);
       }
@@ -323,7 +329,7 @@ void SystemClock_Config(void)
   /** Configure the main internal regulator output voltage
   */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -334,7 +340,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 168;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -347,10 +353,10 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     Error_Handler();
   }
@@ -411,6 +417,8 @@ static void MX_SDIO_SD_Init(void)
   hsd.Init.ClockEdge = SDIO_CLOCK_EDGE_RISING;
   hsd.Init.ClockBypass = SDIO_CLOCK_BYPASS_DISABLE;
   hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
+  /* Card initialization starts in 1-bit mode. BSP_SD_Init() negotiates and
+     switches both the card and SDIO peripheral to 4-bit mode afterwards. */
   hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
   hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
   hsd.Init.ClockDiv = 0;
@@ -421,40 +429,40 @@ static void MX_SDIO_SD_Init(void)
 }
 
 /**
-  * @brief SPI2 Initialization Function
+  * @brief SPI1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_SPI2_Init(void)
+static void MX_SPI1_Init(void)
 {
 
-  /* USER CODE BEGIN SPI2_Init 0 */
+  /* USER CODE BEGIN SPI1_Init 0 */
 
-  /* USER CODE END SPI2_Init 0 */
+  /* USER CODE END SPI1_Init 0 */
 
-  /* USER CODE BEGIN SPI2_Init 1 */
+  /* USER CODE BEGIN SPI1_Init 1 */
 
-  /* USER CODE END SPI2_Init 1 */
-  /* SPI2 parameter configuration*/
-  hspi2.Instance = SPI2;
-  hspi2.Init.Mode = SPI_MODE_MASTER;
-  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi2.Init.CRCPolynomial = 10;
-  if (HAL_SPI_Init(&hspi2) != HAL_OK)
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_1LINE;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN SPI2_Init 2 */
+  /* USER CODE BEGIN SPI1_Init 2 */
 
-  /* USER CODE END SPI2_Init 2 */
+  /* USER CODE END SPI1_Init 2 */
 
 }
 
@@ -481,7 +489,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 105;
+  htim1.Init.Period = 211;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -581,9 +589,9 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
-  /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+  /* DMA2_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
   /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
@@ -699,10 +707,40 @@ static void BIOS_LaunchApplication(void)
   }
 }
 
+static void ILI9341_Draw_Logo(void)
+{
+  static const char logo[] = "GameSTer";
+  static const uint16_t colours[] = {
+    YELLOW, ORANGE, RED, MAGENTA, MAGENTA, GREENYELLOW, GREEN, GREEN
+  };
+  /* A slightly irregular baseline makes the word feel less mechanical. */
+  static const int8_t y_offsets[] = { -8, 5, -3, 9, -6, 3, -10, 7 };
+  const GFXfont *font = &FreeSansBold24pt7b;
+  uint16_t logo_width = 0U;
+  uint16_t x;
+
+  for (uint8_t i = 0U; logo[i] != '\0'; ++i)
+  {
+    logo_width += font->glyph[(uint8_t)logo[i] - font->first].xAdvance;
+  }
+  x = (ILI9341_SCREEN_WIDTH - logo_width) / 2U;
+
+  for (uint8_t i = 0U; logo[i] != '\0'; ++i)
+  {
+    const GFXglyph *glyph = &font->glyph[(uint8_t)logo[i] - font->first];
+
+    ILI9341_Draw_Char_Font(logo[i], x,
+                           (uint16_t)(108 + y_offsets[i]),
+                           colours[i], 1U, WHITE, font);
+    x += glyph->xAdvance;
+    HAL_Delay(150U);
+  }
+}
+
 static void ILI9341_Draw_Splash(void) {
   ILI9341_Fill_Screen(WHITE);
 
-  ILI9341_Draw_SmallImage(bootup_logo, 20, 70, 304, 114);
+  ILI9341_Draw_Logo();
   char buff[20] = {0};
   snprintf(buff, 20, "Bios version: %s", BIOS_VERSION);
   ILI9341_Draw_Text(buff, 118, 210, BLACK, 1, WHITE);   // 17 * 5 = 85 ; 160 - 42

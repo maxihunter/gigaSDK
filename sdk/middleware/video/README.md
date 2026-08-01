@@ -10,7 +10,7 @@ Initialize the module after the display:
 
 ```c
 ILI9341_Init();
-Video_Init(&hspi2);
+Video_Init(&hspi1);
 ```
 
 Play a file while keeping the audio DMA mixer supplied:

@@ -7,9 +7,11 @@
 
 #include <stdio.h>
 
+#include "fatfs.h"
 #include "fonts/FreeSans9pt7b.h"
 #include "ili9341/ILI9341_GFX.h"
 #include "ili9341/ILI9341_STM32_Driver.h"
+#include "main.h"
 
 #define MENU_X0             30U
 #define MENU_X1             290U
@@ -18,6 +20,44 @@
 #define MENU_ROW_HEIGHT     22U
 #define MENU_TEXT_X         40U
 #define MENU_VALUE_X        220U
+
+#define APPS_GRADIENT_Y0    15U
+#define APPS_GRADIENT_Y1    239U
+
+/*
+ * The APPs screen is composed one scanline at a time: the gradient, the cells,
+ * the cursor and the icons all land in the same line buffer, which is then
+ * pushed to the panel in a single burst.  Nothing is ever drawn over anything
+ * else, so scrolling neither flickers nor shows a half-painted frame.
+ */
+#define APPS_COLUMNS        3U
+#define APPS_TITLE_Y0       15
+#define APPS_TITLE_Y1       37
+#define APPS_TITLE_BASELINE 32U
+#define APPS_VIEW_Y0        38
+#define APPS_VIEW_Y1        239
+#define APPS_VIEW_HEIGHT    (APPS_VIEW_Y1 - APPS_VIEW_Y0 + 1)
+/* Whole rows that fit the viewport; scrolling rests on row boundaries. */
+#define APPS_VISIBLE_ROWS   (APPS_VIEW_HEIGHT / APPS_CELL_Y_STEP)
+#define APPS_CELL_WIDTH     90
+#define APPS_CELL_HEIGHT    88
+#define APPS_CELL_X0        10
+#define APPS_CELL_X_STEP    105
+#define APPS_CELL_Y_STEP    100
+#define APPS_ROW_PAD        2
+#define APPS_CURSOR_INSET   3
+#define APPS_CURSOR_WIDTH   2
+#define APPS_SCROLLBAR_X0   314
+#define APPS_SCROLLBAR_X1   316
+#define APPS_SCROLL_MIN     8
+#define APPS_SCROLL_MAX     24
+
+/* Every cell shares one colour; only the cursor outline marks the selection. */
+#define APPS_CELL_COLOUR    0x320DU
+#define APPS_CURSOR_COLOUR  WHITE
+#define APPS_ICON_COLOUR    0xC618U
+#define APPS_TRACK_COLOUR   0x2145U
+#define APPS_THUMB_COLOUR   0x8410U
 
 typedef struct {
     const Menu *menus[MENU_MAX_DEPTH];
@@ -48,16 +88,422 @@ static int32_t rtc_hours = 0;
 static int32_t rtc_minutes = 0;
 static int32_t rtc_seconds = 0;
 static char rtc_menu_title[24] = "Date & time";
+static char status_bios_version[16];
+static char status_sd_free[20];
+static char status_battery[8];
+static bool apps_active;
+static bool apps_full_redraw;
+static bool apps_cursor_visible = true;
+static size_t apps_selected;
+static size_t apps_top_row;
+static int32_t apps_scroll;
 
-static void application_dispatch(void)
+/* One bit per pixel, most significant bit leftmost, rows padded to bytes. */
+typedef struct {
+    uint16_t width;
+    uint16_t height;
+    const uint8_t *mask;
+} AppIconMask;
+
+static const uint8_t app_default_icon_bits[] = {
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x07U, 0xFFU, 0xFFU, 0xFFU, 0xE0U,
+    0x1FU, 0xFFU, 0xFFU, 0xFFU, 0xF8U,
+    0x1CU, 0x00U, 0x00U, 0x00U, 0x38U,
+    0x38U, 0x00U, 0x00U, 0x00U, 0x1CU,
+    0x30U, 0x38U, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0x7CU, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0xFEU, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0xFEU, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0xFEU, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0x7CU, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0x38U, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0x00U, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0x01U, 0x00U, 0x00U, 0x0CU,
+    0x30U, 0x03U, 0x80U, 0x00U, 0x0CU,
+    0x30U, 0x07U, 0xC0U, 0x00U, 0x0CU,
+    0x30U, 0x0FU, 0xE0U, 0x00U, 0x0CU,
+    0x30U, 0x1FU, 0xF0U, 0x08U, 0x0CU,
+    0x30U, 0x3FU, 0xF8U, 0x1CU, 0x0CU,
+    0x30U, 0x7FU, 0xFCU, 0x3EU, 0x0CU,
+    0x30U, 0xFFU, 0xFEU, 0x7FU, 0x0CU,
+    0x31U, 0xFFU, 0xFFU, 0xFFU, 0x8CU,
+    0x33U, 0xFFU, 0xFFU, 0xFFU, 0xCCU,
+    0x37U, 0xFFU, 0xFFU, 0xFFU, 0xECU,
+    0x37U, 0xFFU, 0xFFU, 0xFFU, 0xECU,
+    0x3FU, 0xFFU, 0xFFU, 0xFFU, 0xFCU,
+    0x1CU, 0x00U, 0x00U, 0x00U, 0x38U,
+    0x1FU, 0xFFU, 0xFFU, 0xFFU, 0xF8U,
+    0x07U, 0xFFU, 0xFFU, 0xFFU, 0xE0U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+    0x00U, 0x00U, 0x00U, 0x00U, 0x00U,
+};
+
+static const AppIconMask app_default_icon = { 40U, 40U, app_default_icon_bits };
+
+typedef struct {
+    const char *name;
+    /*
+     * Per-application artwork is loaded separately once that is implemented;
+     * a NULL icon falls back to the built-in placeholder.
+     */
+    const AppIconMask *icon;
+} AppEntry;
+
+static const AppEntry mock_apps[] = {
+    { "Music", NULL },
+    { "Video", NULL },
+    { "Files", NULL },
+    { "Clock", NULL },
+    { "Tools", NULL },
+    { "Game",  NULL },
+    { "Radio", NULL },
+    { "Notes", NULL },
+    { "About", NULL },
+};
+
+static uint16_t apps_gradient_colour(uint16_t y)
 {
-    if (application_start != NULL) {
-        application_start();
+    const uint16_t span = APPS_GRADIENT_Y1 - APPS_GRADIENT_Y0;
+    uint16_t position = (y <= APPS_GRADIENT_Y0) ? 0U :
+                        ((y >= APPS_GRADIENT_Y1) ? span :
+                         (uint16_t)(y - APPS_GRADIENT_Y0));
+    /*
+     * Deep navy at the top, easing into indigo.  It stays dark on purpose so
+     * the cells sitting on it read as raised tiles.
+     */
+    uint16_t red = (uint16_t)(1U + (3U * position) / span);
+    uint16_t green = (uint16_t)(4U + (3U * position) / span);
+    uint16_t blue = (uint16_t)(8U + (4U * position) / span);
+
+    return (uint16_t)((red << 11U) | (green << 5U) | blue);
+}
+
+/* One scanline of the panel in the RGB565 byte order expected by the ILI9341. */
+static uint8_t apps_line[ILI9341_SCREEN_WIDTH * 2U];
+
+static void apps_line_span(int32_t x0, int32_t x1, uint16_t colour)
+{
+    uint8_t high = (uint8_t)(colour >> 8U);
+    uint8_t low = (uint8_t)colour;
+
+    if (x0 < 0) {
+        x0 = 0;
+    }
+    if (x1 > (ILI9341_SCREEN_WIDTH - 1)) {
+        x1 = ILI9341_SCREEN_WIDTH - 1;
+    }
+    for (int32_t x = x0; x <= x1; x++) {
+        apps_line[x * 2] = high;
+        apps_line[(x * 2) + 1] = low;
+    }
+}
+
+/* Draws the shared menu background as one continuous RGB565 stream. */
+static void apps_draw_gradient(void)
+{
+    ILI9341_Set_Address(0U, APPS_GRADIENT_Y0,
+                        ILI9341_SCREEN_WIDTH - 1U, APPS_GRADIENT_Y1);
+    ILI9341_Begin_Pixel_Stream();
+    for (uint16_t y = APPS_GRADIENT_Y0; y <= APPS_GRADIENT_Y1; y++) {
+        apps_line_span(0, ILI9341_SCREEN_WIDTH - 1,
+                       apps_gradient_colour(y));
+        ILI9341_Stream_Pixels(apps_line, (uint16_t)sizeof(apps_line));
+    }
+    ILI9341_End_Pixel_Stream();
+}
+
+static void apps_line_icon_row(const AppIconMask *icon, int32_t x, int32_t row,
+                               uint16_t colour)
+{
+    const uint8_t *bits = &icon->mask[(size_t)row * ((icon->width + 7U) / 8U)];
+
+    for (int32_t column = 0; column < (int32_t)icon->width; column++) {
+        if ((bits[column / 8] & (0x80U >> (column % 8))) != 0U) {
+            apps_line_span(x + column, x + column, colour);
+        }
+    }
+}
+
+static size_t apps_row_count(void)
+{
+    return (MENU_ARRAY_SIZE(mock_apps) + APPS_COLUMNS - 1U) / APPS_COLUMNS;
+}
+
+static int32_t apps_content_height(void)
+{
+    return (int32_t)apps_row_count() * APPS_CELL_Y_STEP;
+}
+
+static int32_t apps_scroll_limit(void)
+{
+    int32_t limit = apps_content_height() - APPS_VIEW_HEIGHT;
+
+    return (limit > 0) ? limit : 0;
+}
+
+/* Moves the first visible row the least amount needed to show the selection. */
+static void apps_track_selection(void)
+{
+    size_t row = apps_selected / APPS_COLUMNS;
+    size_t rows = apps_row_count();
+    size_t maximum = (rows > APPS_VISIBLE_ROWS) ? (rows - APPS_VISIBLE_ROWS) : 0U;
+
+    if (row < apps_top_row) {
+        apps_top_row = row;
+    } else if (row >= (apps_top_row + APPS_VISIBLE_ROWS)) {
+        apps_top_row = row - (APPS_VISIBLE_ROWS - 1U);
+    }
+    if (apps_top_row > maximum) {
+        apps_top_row = maximum;
+    }
+}
+
+static int32_t apps_scroll_target(void)
+{
+    int32_t target = (int32_t)apps_top_row * APPS_CELL_Y_STEP;
+    int32_t limit = apps_scroll_limit();
+
+    return (target < limit) ? target : limit;
+}
+
+static void apps_compose_scrollbar(int32_t screen_y)
+{
+    int32_t content = apps_content_height();
+    int32_t view_y = screen_y - APPS_VIEW_Y0;
+    int32_t thumb_y;
+    int32_t thumb_height;
+
+    if (content <= APPS_VIEW_HEIGHT) {
+        return;
+    }
+    thumb_height = (APPS_VIEW_HEIGHT * APPS_VIEW_HEIGHT) / content;
+    thumb_y = (apps_scroll * APPS_VIEW_HEIGHT) / content;
+    apps_line_span(APPS_SCROLLBAR_X0, APPS_SCROLLBAR_X1,
+                   ((view_y >= thumb_y) && (view_y < (thumb_y + thumb_height))) ?
+                   APPS_THUMB_COLOUR : APPS_TRACK_COLOUR);
+}
+
+/* Adds the part of one cell that falls on the scanline `dy` rows into it. */
+static void apps_compose_cell(size_t index, int32_t x0, int32_t dy)
+{
+    int32_t x1 = x0 + APPS_CELL_WIDTH - 1;
+    const AppIconMask *icon = mock_apps[index].icon;
+    int32_t icon_row;
+
+    apps_line_span(x0, x1, APPS_CELL_COLOUR);
+
+    if (apps_cursor_visible && (index == apps_selected)) {
+        int32_t inner = APPS_CURSOR_INSET + APPS_CURSOR_WIDTH;
+        int32_t last = APPS_CELL_HEIGHT - 1 - APPS_CURSOR_INSET;
+
+        if (((dy >= APPS_CURSOR_INSET) && (dy < inner)) ||
+            ((dy <= last) && (dy > (last - APPS_CURSOR_WIDTH)))) {
+            apps_line_span(x0 + APPS_CURSOR_INSET, x1 - APPS_CURSOR_INSET,
+                           APPS_CURSOR_COLOUR);
+        } else if ((dy >= inner) && (dy <= (last - APPS_CURSOR_WIDTH))) {
+            apps_line_span(x0 + APPS_CURSOR_INSET, x0 + inner - 1,
+                           APPS_CURSOR_COLOUR);
+            apps_line_span(x1 - inner + 1, x1 - APPS_CURSOR_INSET,
+                           APPS_CURSOR_COLOUR);
+        }
     }
 
-    /* An application callback is not allowed to return to the BIOS menu. */
-    for (;;) {
+    if (icon == NULL) {
+        icon = &app_default_icon;
     }
+    icon_row = dy - ((APPS_CELL_HEIGHT - (int32_t)icon->height) / 2);
+    if ((icon_row >= 0) && (icon_row < (int32_t)icon->height)) {
+        apps_line_icon_row(icon,
+                           x0 + ((APPS_CELL_WIDTH - (int32_t)icon->width) / 2),
+                           icon_row, APPS_ICON_COLOUR);
+    }
+}
+
+static void apps_compose_row(int32_t screen_y, int32_t content_y)
+{
+    int32_t row = content_y / APPS_CELL_Y_STEP;
+    int32_t dy = (content_y % APPS_CELL_Y_STEP) - APPS_ROW_PAD;
+
+    apps_line_span(0, ILI9341_SCREEN_WIDTH - 1,
+                   apps_gradient_colour((uint16_t)screen_y));
+    apps_compose_scrollbar(screen_y);
+
+    if ((dy < 0) || (dy >= APPS_CELL_HEIGHT)) {
+        return;
+    }
+    for (uint32_t column = 0U; column < APPS_COLUMNS; column++) {
+        size_t index = ((size_t)row * APPS_COLUMNS) + column;
+
+        if (index >= MENU_ARRAY_SIZE(mock_apps)) {
+            break;
+        }
+        apps_compose_cell(index, APPS_CELL_X0 + (int32_t)column * APPS_CELL_X_STEP,
+                          dy);
+    }
+}
+
+/*
+ * Repaints the screen rows y0..y1 of the grid.  The address window is opened
+ * once and every row is streamed as a single burst, so each pixel is written
+ * exactly once per frame.
+ */
+static void apps_render(int32_t y0, int32_t y1)
+{
+    if (y0 < APPS_VIEW_Y0) {
+        y0 = APPS_VIEW_Y0;
+    }
+    if (y1 > APPS_VIEW_Y1) {
+        y1 = APPS_VIEW_Y1;
+    }
+    if (y0 > y1) {
+        return;
+    }
+
+    ILI9341_Set_Address((uint16_t)0U, (uint16_t)y0,
+                        (uint16_t)(ILI9341_SCREEN_WIDTH - 1), (uint16_t)y1);
+    ILI9341_Begin_Pixel_Stream();
+    for (int32_t y = y0; y <= y1; y++) {
+        apps_compose_row(y, (y - APPS_VIEW_Y0) + apps_scroll);
+        ILI9341_Stream_Pixels(apps_line, (uint16_t)sizeof(apps_line));
+    }
+    ILI9341_End_Pixel_Stream();
+}
+
+/* Screen rows occupied by the row of cells holding `index`. */
+static void apps_row_bounds(size_t index, int32_t *y0, int32_t *y1)
+{
+    *y0 = ((int32_t)(index / APPS_COLUMNS) * APPS_CELL_Y_STEP) + APPS_ROW_PAD -
+          apps_scroll + APPS_VIEW_Y0;
+    *y1 = *y0 + APPS_CELL_HEIGHT - 1;
+}
+
+static uint16_t apps_text_width(const char *text, const GFXfont *font)
+{
+    uint16_t width = 0U;
+
+    for (; *text != '\0'; text++) {
+        uint8_t character = (uint8_t)*text;
+
+        if ((character >= font->first) && (character <= font->last)) {
+            width += font->glyph[character - font->first].xAdvance;
+        }
+    }
+    return width;
+}
+
+/* The name of the selected application replaces the former "APPs" caption. */
+static void apps_draw_title(void)
+{
+    const char *name = mock_apps[apps_selected].name;
+    uint16_t background =
+        apps_gradient_colour((APPS_TITLE_Y0 + APPS_TITLE_Y1) / 2U);
+    uint16_t width = apps_text_width(name, &FreeSans9pt7b);
+    uint16_t x = (width < ILI9341_SCREEN_WIDTH) ?
+                 (uint16_t)((ILI9341_SCREEN_WIDTH - width) / 2U) : 0U;
+
+    /* The second corner of a filled rectangle is exclusive in the GFX layer. */
+    ILI9341_Draw_Filled_Rectangle_Coord(0U, APPS_TITLE_Y0,
+                                         ILI9341_SCREEN_WIDTH,
+                                         APPS_TITLE_Y1 + 1, background);
+    ILI9341_Draw_Text_Font(name, x, APPS_TITLE_BASELINE, WHITE, 1U,
+                           background, &FreeSans9pt7b);
+}
+
+static void apps_draw(void)
+{
+    if (!apps_active || !apps_full_redraw) {
+        return;
+    }
+    apps_draw_title();
+    apps_render(APPS_VIEW_Y0, APPS_VIEW_Y1);
+    apps_full_redraw = false;
+}
+
+/*
+ * Slides the grid to `target`, decelerating towards the end.  The pace is set
+ * by the time a frame needs on the bus, so no artificial delay is required.
+ */
+static void apps_scroll_animate(int32_t target)
+{
+    while (apps_scroll != target) {
+        int32_t remaining = target - apps_scroll;
+        int32_t distance = (remaining > 0) ? remaining : -remaining;
+        int32_t step = (distance + 2) / 3;
+
+        if (step < APPS_SCROLL_MIN) {
+            step = APPS_SCROLL_MIN;
+        }
+        if (step > APPS_SCROLL_MAX) {
+            step = APPS_SCROLL_MAX;
+        }
+        if (step > distance) {
+            step = distance;
+        }
+        apps_scroll += (remaining > 0) ? step : -step;
+        apps_render(APPS_VIEW_Y0, APPS_VIEW_Y1);
+    }
+}
+
+static void apps_open(void)
+{
+    apps_active = true;
+    apps_cursor_visible = true;
+    apps_selected = 0U;
+    apps_top_row = 0U;
+    apps_scroll = 0;
+    apps_full_redraw = true;
+}
+
+static void apps_move_selection(size_t new_selected)
+{
+    size_t old_selected = apps_selected;
+    int32_t target;
+    int32_t old_y0;
+    int32_t old_y1;
+    int32_t new_y0;
+    int32_t new_y1;
+
+    if ((new_selected >= MENU_ARRAY_SIZE(mock_apps)) ||
+        (new_selected == old_selected)) {
+        return;
+    }
+    apps_selected = new_selected;
+    apps_track_selection();
+    apps_draw_title();
+
+    target = apps_scroll_target();
+    if (target != apps_scroll) {
+        apps_scroll_animate(target);
+        return;
+    }
+    /* Without scrolling only the cell rows losing and gaining the cursor move. */
+    apps_row_bounds(old_selected, &old_y0, &old_y1);
+    apps_row_bounds(new_selected, &new_y0, &new_y1);
+    apps_render((old_y0 < new_y0) ? old_y0 : new_y0,
+                (old_y1 > new_y1) ? old_y1 : new_y1);
+}
+
+static void apps_flash_selection(void)
+{
+    int32_t y0;
+    int32_t y1;
+
+    apps_row_bounds(apps_selected, &y0, &y1);
+    apps_cursor_visible = false;
+    apps_render(y0, y1);
+    HAL_Delay(70U);
+    apps_cursor_visible = true;
+    apps_render(y0, y1);
 }
 
 static const Menu settings_menu;
@@ -65,7 +511,43 @@ static const Menu rtc_settings_menu;
 static const Menu network_menu;
 static const Menu storage_menu;
 static const Menu media_menu;
-static const Menu about_menu;
+static const Menu status_menu;
+
+static void status_format_size(char *buffer, size_t size, uint64_t bytes)
+{
+    const uint64_t gib = 1024ULL * 1024ULL * 1024ULL;
+    const uint64_t mib = 1024ULL * 1024ULL;
+
+    if (bytes >= gib) {
+        uint64_t tenths = (bytes * 10ULL) / gib;
+        snprintf(buffer, size, "%lu.%lu GB",
+                 (unsigned long)(tenths / 10ULL),
+                 (unsigned long)(tenths % 10ULL));
+    } else {
+        uint64_t tenths = (bytes * 10ULL) / mib;
+        snprintf(buffer, size, "%lu.%lu MB",
+                 (unsigned long)(tenths / 10ULL),
+                 (unsigned long)(tenths % 10ULL));
+    }
+}
+
+static void status_refresh(void)
+{
+    DWORD free_clusters;
+    FATFS *filesystem;
+
+    snprintf(status_bios_version, sizeof(status_bios_version), "%s",
+             BIOS_VERSION);
+    snprintf(status_battery, sizeof(status_battery), "%u%%", 75U);
+
+    if (f_getfree(SDPath, &free_clusters, &filesystem) == FR_OK) {
+        uint64_t free_bytes = (uint64_t)free_clusters *
+                              (uint64_t)filesystem->csize * 512ULL;
+        status_format_size(status_sd_free, sizeof(status_sd_free), free_bytes);
+    } else {
+        snprintf(status_sd_free, sizeof(status_sd_free), "unavailable");
+    }
+}
 
 static void rtc_editor_read(void)
 {
@@ -139,17 +621,21 @@ static const Menu storage_menu = {
 static const Menu media_menu = {
     "Media", media_items, MENU_ARRAY_SIZE(media_items)
 };
-static const Menu about_menu = {
-    "gigaSDK BIOS", NULL, 0U
+static const MenuItem status_items[] = {
+    MENU_INFO("BIOS version", status_bios_version),
+    MENU_INFO("SD free", status_sd_free),
+    MENU_INFO("Battery", status_battery),
+};
+static const Menu status_menu = {
+    "Status", status_items, MENU_ARRAY_SIZE(status_items)
 };
 
 static const MenuItem root_items[] = {
-    MENU_APPLICATION("APP", application_dispatch),
+    MENU_ACTION("APPs", apps_open),
     MENU_SUBMENU("Network", &network_menu),
     MENU_SUBMENU("Storage", &storage_menu),
-    MENU_SUBMENU("Media", &media_menu),
     MENU_SUBMENU("Settings", &settings_menu),
-    MENU_SUBMENU("About", &about_menu),
+    MENU_SUBMENU("Status", &status_menu),
 };
 
 static const Menu root_menu = {
@@ -244,6 +730,13 @@ static void draw_item_value(const MenuItem *item, uint16_t baseline,
         ILI9341_Draw_Text_Font("START", MENU_VALUE_X, baseline,
                                foreground, 1, background, &FreeSans9pt7b);
         break;
+    case MENU_ITEM_INFO:
+        if (item->data.info != NULL) {
+            ILI9341_Draw_Text_Font(item->data.info, MENU_VALUE_X - 45U,
+                                   baseline, foreground, 1, background,
+                                   &FreeSans9pt7b);
+        }
+        break;
     }
 }
 
@@ -294,6 +787,10 @@ void MenuEngine_Draw(void)
     size_t selected;
     bool full_redraw;
 
+    if (apps_active) {
+        apps_draw();
+        return;
+    }
     if (!engine.dirty || (menu == NULL)) {
         return;
     }
@@ -310,17 +807,16 @@ void MenuEngine_Draw(void)
     }
 
     if (full_redraw) {
-        ILI9341_Draw_Filled_Rectangle_Coord(MENU_X0, 16U, MENU_X1, 224U,
-                                             DARKGREY);
-        ILI9341_Draw_Filled_Rectangle_Coord(MENU_X0, 16U, MENU_X1, 16U+MENU_FIRST_ROW_Y,
-                                             CYAN);
+        apps_draw_gradient();
         ILI9341_Draw_Text_Font(menu->title, MENU_TEXT_X, MENU_TITLE_BASELINE,
-                               BLACK, 1, CYAN, &FreeSans9pt7b);
+                               WHITE, 1, apps_gradient_colour(MENU_TITLE_BASELINE),
+                               &FreeSans9pt7b);
 
         if (menu->count == 0U) {
             ILI9341_Draw_Text_Font("(empty)", MENU_TEXT_X,
                                    MENU_FIRST_ROW_Y + 16U, WHITE, 1,
-                                   DARKGREY, &FreeSans9pt7b);
+                                   apps_gradient_colour(MENU_FIRST_ROW_Y + 8U),
+                                   &FreeSans9pt7b);
         }
         for (size_t i = first; i < last; i++) {
             draw_menu_item(menu, i, first);
@@ -352,6 +848,12 @@ void MenuEngine_Up(void)
 {
     const Menu *menu = current_menu();
 
+    if (apps_active) {
+        if (apps_selected >= APPS_COLUMNS) {
+            apps_move_selection(apps_selected - APPS_COLUMNS);
+        }
+        return;
+    }
     if ((menu == NULL) || (menu->count == 0U)) {
         return;
     }
@@ -373,6 +875,20 @@ void MenuEngine_Down(void)
 {
     const Menu *menu = current_menu();
 
+    if (apps_active) {
+        size_t count = MENU_ARRAY_SIZE(mock_apps);
+        size_t target = apps_selected + APPS_COLUMNS;
+
+        if (target >= count) {
+            /* A partly filled last row is entered at its final entry. */
+            if ((apps_selected / APPS_COLUMNS) >= ((count - 1U) / APPS_COLUMNS)) {
+                return;
+            }
+            target = count - 1U;
+        }
+        apps_move_selection(target);
+        return;
+    }
     if ((menu == NULL) || (menu->count == 0U)) {
         return;
     }
@@ -393,6 +909,12 @@ void MenuEngine_Left(void)
 {
     const MenuItem *item = current_item();
 
+    if (apps_active) {
+        if ((apps_selected % APPS_COLUMNS) > 0U) {
+            apps_move_selection(apps_selected - 1U);
+        }
+        return;
+    }
     if (engine.editing) {
         change_integer(item, -1);
     } else {
@@ -404,6 +926,13 @@ void MenuEngine_Right(void)
 {
     const MenuItem *item = current_item();
 
+    if (apps_active) {
+        if ((((apps_selected % APPS_COLUMNS) + 1U) < APPS_COLUMNS) &&
+            ((apps_selected + 1U) < MENU_ARRAY_SIZE(mock_apps))) {
+            apps_move_selection(apps_selected + 1U);
+        }
+        return;
+    }
     if (engine.editing) {
         change_integer(item, 1);
     } else if ((item != NULL) && (item->type == MENU_ITEM_SUBMENU)) {
@@ -415,6 +944,11 @@ void MenuEngine_Select(void)
 {
     const MenuItem *item = current_item();
 
+    if (apps_active) {
+        /* Placeholder feedback until application discovery is implemented. */
+        apps_flash_selection();
+        return;
+    }
     if (item == NULL) {
         return;
     }
@@ -423,6 +957,9 @@ void MenuEngine_Select(void)
     case MENU_ITEM_SUBMENU:
         if ((item->data.submenu != NULL) &&
             (engine.depth + 1U < MENU_MAX_DEPTH)) {
+            if (item->data.submenu == &status_menu) {
+                status_refresh();
+            }
             engine.depth++;
             engine.menus[engine.depth] = item->data.submenu;
             engine.selected[engine.depth] = 0U;
@@ -454,12 +991,18 @@ void MenuEngine_Select(void)
         }
         for (;;) {
         }
+    case MENU_ITEM_INFO:
+        break;
     }
 }
 
 void MenuEngine_Back(void)
 {
-    if (engine.editing) {
+    if (apps_active) {
+        apps_active = false;
+        engine.rendered_valid = false;
+        engine.dirty = true;
+    } else if (engine.editing) {
         engine.editing = false;
         engine.dirty = true;
     } else if (engine.depth > 0U) {
@@ -477,6 +1020,8 @@ bool MenuEngine_IsEditing(void)
 void mainMenu_Init(MenuCallback application_callback)
 {
     application_start = application_callback;
+    (void)application_start;
+    apps_active = false;
     rtc_editor_read();
     MenuEngine_Init(&root_menu);
 }

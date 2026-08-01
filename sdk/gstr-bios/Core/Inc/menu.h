@@ -27,7 +27,8 @@ typedef enum {
     MENU_ITEM_INT,
     MENU_ITEM_BOOL,
     MENU_ITEM_ACTION,
-    MENU_ITEM_APPLICATION
+    MENU_ITEM_APPLICATION,
+    MENU_ITEM_INFO
 } MenuItemType;
 
 typedef struct {
@@ -43,6 +44,7 @@ typedef struct {
         } integer;
         bool *boolean;
         MenuCallback callback;
+        const char *info;
     } data;
 } MenuItem;
 
@@ -62,6 +64,8 @@ struct Menu {
     { (label_), MENU_ITEM_BOOL, { .boolean = (value_) } }
 #define MENU_ACTION(label_, callback_) \
     { (label_), MENU_ITEM_ACTION, { .callback = (callback_) } }
+#define MENU_INFO(label_, text_) \
+    { (label_), MENU_ITEM_INFO, { .info = (text_) } }
 /*
  * The callback of an application item must not return.  It takes ownership of
  * the display, input and main loop after it is called.
