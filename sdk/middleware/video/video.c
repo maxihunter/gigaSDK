@@ -2,14 +2,35 @@
 
 #include "ff.h"
 #include "ili9341/ILI9341_STM32_Driver.h"
+#if VIDEO_FPS_OVERLAY
+#include "ili9341/ILI9341_GFX.h"
+#endif
 
 #include <string.h>
 
 #define VIDEO_PIXEL_FORMAT_RGB565_BE 1U
 #define VIDEO_IO_BUFFER_SIZE         2048U
+#define VIDEO_FPS_UPDATE_FRAMES      10U
 
 static SPI_HandleTypeDef *video_spi;
 static uint8_t video_io_buffer[VIDEO_IO_BUFFER_SIZE] __attribute__((aligned(4)));
+
+#if VIDEO_FPS_OVERLAY
+static void Video_DrawFps(uint32_t fps_x10)
+{
+  char text[] = "FPS:00.0";
+
+  if (fps_x10 > 999U)
+  {
+    fps_x10 = 999U;
+  }
+  uint32_t whole = fps_x10 / 10U;
+  text[4] = (whole >= 10U) ? (char)('0' + whole / 10U) : ' ';
+  text[5] = (char)('0' + whole % 10U);
+  text[7] = (char)('0' + fps_x10 % 10U);
+  ILI9341_Draw_Text(text, 0U, 0U, WHITE, 1U, BLACK);
+}
+#endif
 
 static uint16_t Video_ReadU16(const uint8_t *value)
 {
@@ -251,6 +272,11 @@ HAL_StatusTypeDef Video_PlayFile(const char *path,
   }
 
   uint32_t start_tick = HAL_GetTick();
+#if VIDEO_FPS_OVERLAY
+  uint32_t fps_sample_tick = start_tick;
+  uint32_t displayed_fps_x10 = 0U;
+  uint8_t fps_available = 0U;
+#endif
   status = HAL_OK;
   for (uint32_t frame = 0U; frame < info.frame_count; frame++)
   {
@@ -263,6 +289,13 @@ HAL_StatusTypeDef Video_PlayFile(const char *path,
       status = HAL_ERROR;
       break;
     }
+
+#if VIDEO_FPS_OVERLAY
+    if (fps_available != 0U)
+    {
+      Video_DrawFps(displayed_fps_x10);
+    }
+#endif
 
     uint32_t deadline = start_tick +
         (uint32_t)(((uint64_t)(frame + 1U) * 1000000U) / info.fps_milli);
@@ -278,6 +311,23 @@ HAL_StatusTypeDef Video_PlayFile(const char *path,
       }
       HAL_Delay(1U);
     }
+
+#if VIDEO_FPS_OVERLAY
+    if (((frame + 1U) % VIDEO_FPS_UPDATE_FRAMES) == 0U)
+    {
+      uint32_t now = HAL_GetTick();
+      uint32_t elapsed = now - fps_sample_tick;
+      if (elapsed == 0U)
+      {
+        elapsed = 1U;
+      }
+      displayed_fps_x10 =
+          (VIDEO_FPS_UPDATE_FRAMES * 10000U + elapsed / 2U) / elapsed;
+      fps_sample_tick = now;
+      fps_available = 1U;
+      Video_DrawFps(displayed_fps_x10);
+    }
+#endif
   }
 
 close_file:

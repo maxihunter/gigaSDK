@@ -40,3 +40,11 @@ sdk/tools/video-prepare.sh --fps 12 input.mp4 small.vid 200 128
 
 There is no audio track in GVID. A full 320x240 frame occupies 153600 bytes;
 at 10 FPS the SD card and display path must sustain about 1.5 MB/s.
+
+The player measures the actual display rate over groups of 10 frames and shows
+it in the upper-left corner. Disable the overlay and remove its code from the
+firmware with:
+
+```sh
+make VIDEO_FPS_OVERLAY=0
+```

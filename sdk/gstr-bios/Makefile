@@ -12,6 +12,7 @@
 
 DISPLAY = ILI9341_320_240
 PLATFORM = STM32F4
+VIDEO_FPS_OVERLAY ?= 1
 ######################################
 # target
 ######################################
@@ -113,7 +114,8 @@ AS_DEFS =
 # C defines
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
--DSTM32F407xx
+-DSTM32F407xx \
+-DVIDEO_FPS_OVERLAY=$(VIDEO_FPS_OVERLAY)
 
 
 # AS includes

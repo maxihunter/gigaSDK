@@ -188,6 +188,8 @@ int main(void)
   {
     Error_Handler();
   }
+  ILI9341_FPS_Test();
+  HAL_Delay(5000);
   ILI9341_Draw_Splash();
   
   WS2812_SetLed1Color(200, 200, 200);

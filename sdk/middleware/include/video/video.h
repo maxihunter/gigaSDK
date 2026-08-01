@@ -8,6 +8,11 @@
 #define VIDEO_GVID_HEADER_SIZE 24U
 #define VIDEO_GVID_VERSION     1U
 
+/* Set to 0 in the build flags to remove the FPS overlay code completely. */
+#ifndef VIDEO_FPS_OVERLAY
+#define VIDEO_FPS_OVERLAY 1
+#endif
+
 typedef void (*Video_ServiceHandler)(void);
 typedef uint8_t (*Video_AbortHandler)(void);
 
