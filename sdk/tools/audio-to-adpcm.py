@@ -103,7 +103,7 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("input", type=Path, help="input audio file")
-    parser.add_argument("output", type=Path, help="output .gima file")
+    parser.add_argument("output", type=Path, help="output .gim file")
     parser.add_argument("--mono", action="store_true",
                         help="encode one channel; playback duplicates it to L/R")
     parser.add_argument("-f", "--force", action="store_true",

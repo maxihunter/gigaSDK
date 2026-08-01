@@ -35,6 +35,7 @@
 #include "rtc/rtc_clock.h"
 #include "led/ws2812.h"
 #include "audio/audio.h"
+#include "video/video.h"
 
 /* USER CODE END Includes */
 
@@ -47,7 +48,8 @@
 /* USER CODE BEGIN PD */
 /* Raw PCM played at boot, prepared with sdk/tools/audio-to-pcm.sh. */
 #define BIOS_MUSIC_FILE "music.pcm"
-#define BIOS_MUSIC_FILE_IMA "theme.gima"
+#define BIOS_MUSIC_FILE_IMA "theme.gim"
+#define BIOS_INTRO_VIDEO_FILE "intro.vid"
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -86,6 +88,7 @@ static void MX_I2S3_Init(void);
 static void ILI9341_Draw_Splash(void);
 static void ILI9341_FPS_Test(void);
 static uint8_t BIOS_AudioAbortRequested(void);
+static void BIOS_VideoServiceAudio(void);
 static void BIOS_LaunchApplication(void);
 /* USER CODE END PFP */
 
@@ -181,6 +184,10 @@ int main(void)
   HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
   //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
   ILI9341_Init();
+  if (Video_Init(&hspi2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   ILI9341_Draw_Splash();
   
   WS2812_SetLed1Color(200, 200, 200);
@@ -234,17 +241,36 @@ int main(void)
   if (sd_error == 0)
   {
     //printf("PCM: playing %s\n\r", BIOS_MUSIC_FILE);
-    if (Audio_PlayPcmFile(BIOS_MUSIC_FILE) != HAL_OK)
-    //printf("PCM: playing %s\n\r", BIOS_MUSIC_FILE_IMA);
-    //if (Audio_PlayImaAdpcmFile(BIOS_MUSIC_FILE_IMA) != HAL_OK)
+    //if (Audio_PlayPcmFile(BIOS_MUSIC_FILE) != HAL_OK)
+    printf("Mixer: playing %s\n\r", BIOS_MUSIC_FILE_IMA);
+    if (Audio_MixerStartImaAdpcmMusic(BIOS_MUSIC_FILE_IMA, 1U) != HAL_OK)
     {
-      printf("PCM: playback of %s failed\n\r", BIOS_MUSIC_FILE_IMA);
+      printf("Mixer: playback of %s failed\n\r", BIOS_MUSIC_FILE_IMA);
+    }
+    else
+    {
+      printf("Video: playing %s\n\r", BIOS_INTRO_VIDEO_FILE);
+      if (Video_PlayFile(BIOS_INTRO_VIDEO_FILE,
+                         BIOS_VideoServiceAudio, NULL) != HAL_OK)
+      {
+        printf("Video: playback of %s failed\n\r", BIOS_INTRO_VIDEO_FILE);
+      }
+
+      /* Restore the BIOS interface after the last video frame. */
+      mainMenu_Handler();
+      menuHeader_Handler(&current_time, 4);
     }
   }
   int port_state;
   uint32_t previous_keymap = 0U;
   while (1)
   {
+    if (Audio_MixerIsRunning() && (Audio_MixerProcess() != HAL_OK))
+    {
+      printf("Mixer: stream error\n\r");
+      (void)Audio_MixerStop();
+    }
+
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
     uint32_t keymap = getKeyState();
     uint32_t pressed_keys = keymap & ~previous_keymap;
@@ -273,7 +299,7 @@ int main(void)
         mainMenu_Handler();
     }
 		port_state = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_6);
-    HAL_Delay(50);
+    HAL_Delay(5);
     HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
 
     /* USER CODE END WHILE */
@@ -645,6 +671,15 @@ static void MX_GPIO_Init(void)
 static uint8_t BIOS_AudioAbortRequested(void)
 {
   return (getKeyState() != 0U) ? 1U : 0U;
+}
+
+/* Keep the I2S DMA mixer filled while video data is streamed from FatFs. */
+static void BIOS_VideoServiceAudio(void)
+{
+  if (Audio_MixerIsRunning() && (Audio_MixerProcess() != HAL_OK))
+  {
+    (void)Audio_MixerStop();
+  }
 }
 
 /*

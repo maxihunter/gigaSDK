@@ -30,9 +30,23 @@ static uint16_t audio_buffer[AUDIO_HALF_WORDS * 2U] __attribute__((aligned(4)));
 static I2S_HandleTypeDef *audio_i2s;
 static Audio_AbortHandler audio_abort;
 static Audio_FillHalf audio_fill_half;
+#ifdef AUDIO_ERROR_DIAGNOSTICS
+static Audio_Error audio_last_error;
+#define AUDIO_SET_ERROR(error) do { audio_last_error = (error); } while (0)
+#else
+#define AUDIO_SET_ERROR(error) do { } while (0)
+#endif
 static uint8_t audio_flushed_halves;
 static volatile uint8_t audio_first_half_free;
 static volatile uint8_t audio_second_half_free;
+static uint8_t audio_mixer_running;
+
+#ifdef AUDIO_ERROR_DIAGNOSTICS
+Audio_Error Audio_GetLastError(void)
+{
+  return audio_last_error;
+}
+#endif
 
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 {
@@ -144,6 +158,11 @@ static uint8_t Audio_Pump(void)
 
 static HAL_StatusTypeDef Audio_Play(Audio_FillHalf fill, uint32_t timeout_ms)
 {
+  if (audio_mixer_running)
+  {
+    return HAL_BUSY;
+  }
+
   audio_fill_half = fill;
   audio_flushed_halves = 0U;
   audio_first_half_free = 0U;
@@ -382,6 +401,23 @@ static uint8_t audio_adpcm_have_high_nibble;
 static uint8_t audio_adpcm_nibble_byte;
 static uint8_t audio_adpcm_failed;
 
+static void Audio_AdpcmResetDecoder(void)
+{
+  IMA_ADPCM_StateInit(&audio_adpcm_state[0],
+                      audio_adpcm_info.initial_predictor[0],
+                      audio_adpcm_info.initial_step_index[0]);
+  IMA_ADPCM_StateInit(&audio_adpcm_state[1],
+                      audio_adpcm_info.initial_predictor[1],
+                      audio_adpcm_info.initial_step_index[1]);
+  audio_adpcm_frames_remaining = audio_adpcm_info.frame_count;
+  audio_adpcm_data_remaining = audio_adpcm_info.data_bytes;
+  audio_adpcm_io_size = 0U;
+  audio_adpcm_io_position = 0U;
+  audio_adpcm_first_frame = 1U;
+  audio_adpcm_have_high_nibble = 0U;
+  audio_adpcm_failed = 0U;
+}
+
 static uint8_t Audio_AdpcmReadByte(uint8_t *value)
 {
   if ((value == NULL) || (audio_adpcm_data_remaining == 0U))
@@ -508,21 +544,34 @@ HAL_StatusTypeDef Audio_PlayImaAdpcmFile(const char *path)
   uint8_t header[IMA_ADPCM_GIMA_HEADER_SIZE];
   UINT header_bytes = 0U;
 
-  if ((path == NULL) || (Audio_GetClockInfo(&clock_info) != HAL_OK))
+  AUDIO_SET_ERROR(AUDIO_ERROR_NONE);
+  if (path == NULL)
   {
+    AUDIO_SET_ERROR(AUDIO_ERROR_ARGUMENT);
+    return HAL_ERROR;
+  }
+  if (Audio_GetClockInfo(&clock_info) != HAL_OK)
+  {
+    AUDIO_SET_ERROR(AUDIO_ERROR_CLOCK);
     return HAL_ERROR;
   }
   if (f_open(&audio_file, path, FA_READ) != FR_OK)
   {
+    AUDIO_SET_ERROR(AUDIO_ERROR_FILE_OPEN);
     return HAL_ERROR;
   }
 
   HAL_StatusTypeDef status = HAL_ERROR;
   if ((f_read(&audio_file, header, sizeof(header), &header_bytes) != FR_OK) ||
-      (header_bytes != sizeof(header)) ||
-      (IMA_ADPCM_ParseGimaHeader(header, sizeof(header),
-                                 &audio_adpcm_info) != 0))
+      (header_bytes != sizeof(header)))
   {
+    AUDIO_SET_ERROR(AUDIO_ERROR_HEADER_READ);
+    goto close_file;
+  }
+  if (IMA_ADPCM_ParseGimaHeader(header, sizeof(header),
+                                &audio_adpcm_info) != 0)
+  {
+    AUDIO_SET_ERROR(AUDIO_ERROR_HEADER_INVALID);
     goto close_file;
   }
 
@@ -530,26 +579,19 @@ HAL_StatusTypeDef Audio_PlayImaAdpcmFile(const char *path)
       (clock_info.sample_rate > audio_adpcm_info.sample_rate) ?
       (clock_info.sample_rate - audio_adpcm_info.sample_rate) :
       (audio_adpcm_info.sample_rate - clock_info.sample_rate);
-  if ((rate_difference > (audio_adpcm_info.sample_rate / 50U)) ||
-      ((uint64_t)IMA_ADPCM_GIMA_HEADER_SIZE + audio_adpcm_info.data_bytes >
-       (uint64_t)f_size(&audio_file)))
+  if (rate_difference > (audio_adpcm_info.sample_rate / 50U))
   {
+    AUDIO_SET_ERROR(AUDIO_ERROR_SAMPLE_RATE);
+    goto close_file;
+  }
+  if ((uint64_t)IMA_ADPCM_GIMA_HEADER_SIZE + audio_adpcm_info.data_bytes >
+      (uint64_t)f_size(&audio_file))
+  {
+    AUDIO_SET_ERROR(AUDIO_ERROR_FILE_TRUNCATED);
     goto close_file;
   }
 
-  IMA_ADPCM_StateInit(&audio_adpcm_state[0],
-                      audio_adpcm_info.initial_predictor[0],
-                      audio_adpcm_info.initial_step_index[0]);
-  IMA_ADPCM_StateInit(&audio_adpcm_state[1],
-                      audio_adpcm_info.initial_predictor[1],
-                      audio_adpcm_info.initial_step_index[1]);
-  audio_adpcm_frames_remaining = audio_adpcm_info.frame_count;
-  audio_adpcm_data_remaining = audio_adpcm_info.data_bytes;
-  audio_adpcm_io_size = 0U;
-  audio_adpcm_io_position = 0U;
-  audio_adpcm_first_frame = 1U;
-  audio_adpcm_have_high_nibble = 0U;
-  audio_adpcm_failed = 0U;
+  Audio_AdpcmResetDecoder();
 
   uint32_t duration_ms = (uint32_t)(
       ((uint64_t)audio_adpcm_info.frame_count * 1000U) /
@@ -557,10 +599,431 @@ HAL_StatusTypeDef Audio_PlayImaAdpcmFile(const char *path)
   status = Audio_Play(Audio_AdpcmFillHalf, duration_ms + 2000U);
   if (audio_adpcm_failed)
   {
+    AUDIO_SET_ERROR(AUDIO_ERROR_STREAM_READ);
     status = HAL_ERROR;
+  }
+  else if (status != HAL_OK)
+  {
+    AUDIO_SET_ERROR(AUDIO_ERROR_PLAYBACK);
   }
 
 close_file:
   (void)f_close(&audio_file);
   return status;
+}
+
+/* ------------------------------------------------------------------- mixer */
+
+typedef enum
+{
+  AUDIO_MIXER_SOURCE_NONE = 0,
+  AUDIO_MIXER_SOURCE_PCM,
+  AUDIO_MIXER_SOURCE_ADPCM
+} Audio_MixerSource;
+
+static struct
+{
+  Audio_MixerSource source;
+  uint8_t loop;
+  uint8_t source_ended;
+  uint8_t file_open;
+  uint16_t music_volume;
+} audio_mixer = {
+  .music_volume = 24576U
+};
+
+static struct
+{
+  const uint8_t *data;
+  uint32_t data_size;
+  uint32_t data_position;
+  uint32_t frames_remaining;
+  IMA_ADPCM_StreamInfo info;
+  IMA_ADPCM_State state[2];
+  uint16_t volume;
+  uint8_t first_frame;
+  uint8_t have_high_nibble;
+  uint8_t nibble_byte;
+  uint8_t active;
+} audio_effect;
+
+static int16_t Audio_MixerClamp(int32_t sample)
+{
+  if (sample > 32767)
+  {
+    return 32767;
+  }
+  if (sample < -32768)
+  {
+    return -32768;
+  }
+  return (int16_t)sample;
+}
+
+static uint8_t Audio_MixerRateMatches(uint32_t sample_rate)
+{
+  Audio_ClockInfo clock_info;
+  if ((sample_rate == 0U) || (Audio_GetClockInfo(&clock_info) != HAL_OK))
+  {
+    return 0U;
+  }
+
+  uint32_t difference = (clock_info.sample_rate > sample_rate) ?
+      (clock_info.sample_rate - sample_rate) :
+      (sample_rate - clock_info.sample_rate);
+  return (difference <= (sample_rate / 50U)) ? 1U : 0U;
+}
+
+static HAL_StatusTypeDef Audio_MixerOpenAdpcm(const char *path)
+{
+  uint8_t header[IMA_ADPCM_GIMA_HEADER_SIZE];
+  UINT header_bytes = 0U;
+
+  if (f_open(&audio_file, path, FA_READ) != FR_OK)
+  {
+    return HAL_ERROR;
+  }
+  audio_mixer.file_open = 1U;
+
+  if ((f_read(&audio_file, header, sizeof(header), &header_bytes) != FR_OK) ||
+      (header_bytes != sizeof(header)) ||
+      (IMA_ADPCM_ParseGimaHeader(header, sizeof(header),
+                                 &audio_adpcm_info) != 0) ||
+      !Audio_MixerRateMatches(audio_adpcm_info.sample_rate) ||
+      ((uint64_t)IMA_ADPCM_GIMA_HEADER_SIZE + audio_adpcm_info.data_bytes >
+       (uint64_t)f_size(&audio_file)))
+  {
+    return HAL_ERROR;
+  }
+
+  Audio_AdpcmResetDecoder();
+  return HAL_OK;
+}
+
+static uint8_t Audio_MixerRestartAdpcm(void)
+{
+  if (f_lseek(&audio_file, IMA_ADPCM_GIMA_HEADER_SIZE) != FR_OK)
+  {
+    return 0U;
+  }
+  Audio_AdpcmResetDecoder();
+  return 1U;
+}
+
+static void Audio_MixerFillPcmMusic(uint16_t *half)
+{
+  uint32_t offset = 0U;
+  memset(half, 0, AUDIO_HALF_BYTES);
+
+  while ((offset < AUDIO_HALF_BYTES) && !audio_mixer.source_ended)
+  {
+    UINT read_bytes = 0U;
+    UINT requested = (UINT)(AUDIO_HALF_BYTES - offset);
+    FRESULT result = f_read(&audio_file, (uint8_t *)half + offset,
+                            requested, &read_bytes);
+    offset += read_bytes;
+
+    if (result != FR_OK)
+    {
+      audio_mixer.source_ended = 1U;
+      break;
+    }
+    if (read_bytes < requested)
+    {
+      if (audio_mixer.loop && (f_size(&audio_file) >= 4U) &&
+          (f_lseek(&audio_file, 0U) == FR_OK))
+      {
+        continue;
+      }
+      audio_mixer.source_ended = 1U;
+    }
+  }
+}
+
+static void Audio_MixerFillAdpcmMusic(uint16_t *half)
+{
+  memset(half, 0, AUDIO_HALF_BYTES);
+
+  for (uint32_t frame = 0U; frame < AUDIO_HALF_FRAMES; frame++)
+  {
+    int16_t left;
+    int16_t right;
+
+    if (!Audio_AdpcmNextFrame(&left, &right))
+    {
+      if (audio_mixer.loop && !audio_adpcm_failed &&
+          Audio_MixerRestartAdpcm())
+      {
+        if (!Audio_AdpcmNextFrame(&left, &right))
+        {
+          audio_mixer.source_ended = 1U;
+          break;
+        }
+      }
+      else
+      {
+        audio_mixer.source_ended = 1U;
+        break;
+      }
+    }
+
+    half[frame * 2U] = (uint16_t)left;
+    half[(frame * 2U) + 1U] = (uint16_t)right;
+  }
+}
+
+static uint8_t Audio_MixerEffectNibble(uint8_t *nibble)
+{
+  if (!audio_effect.have_high_nibble)
+  {
+    if (audio_effect.data_position >= audio_effect.data_size)
+    {
+      return 0U;
+    }
+    audio_effect.nibble_byte = audio_effect.data[audio_effect.data_position++];
+    *nibble = audio_effect.nibble_byte & 0x0FU;
+    audio_effect.have_high_nibble = 1U;
+  }
+  else
+  {
+    *nibble = audio_effect.nibble_byte >> 4;
+    audio_effect.have_high_nibble = 0U;
+  }
+  return 1U;
+}
+
+static uint8_t Audio_MixerEffectFrame(int16_t *left, int16_t *right)
+{
+  if (!audio_effect.active || (audio_effect.frames_remaining == 0U))
+  {
+    audio_effect.active = 0U;
+    return 0U;
+  }
+
+  if (audio_effect.first_frame)
+  {
+    *left = audio_effect.info.initial_predictor[0];
+    *right = (audio_effect.info.channels == 2U) ?
+        audio_effect.info.initial_predictor[1] : *left;
+    audio_effect.first_frame = 0U;
+  }
+  else
+  {
+    uint8_t nibble;
+    if (!Audio_MixerEffectNibble(&nibble))
+    {
+      audio_effect.active = 0U;
+      return 0U;
+    }
+    *left = IMA_ADPCM_DecodeNibble(&audio_effect.state[0], nibble);
+
+    if (audio_effect.info.channels == 2U)
+    {
+      if (!Audio_MixerEffectNibble(&nibble))
+      {
+        audio_effect.active = 0U;
+        return 0U;
+      }
+      *right = IMA_ADPCM_DecodeNibble(&audio_effect.state[1], nibble);
+    }
+    else
+    {
+      *right = *left;
+    }
+  }
+
+  audio_effect.frames_remaining--;
+  return 1U;
+}
+
+static void Audio_MixerFillHalf(uint16_t *half)
+{
+  if ((audio_mixer.source == AUDIO_MIXER_SOURCE_PCM) &&
+      !audio_mixer.source_ended)
+  {
+    Audio_MixerFillPcmMusic(half);
+  }
+  else if ((audio_mixer.source == AUDIO_MIXER_SOURCE_ADPCM) &&
+           !audio_mixer.source_ended)
+  {
+    Audio_MixerFillAdpcmMusic(half);
+  }
+  else
+  {
+    memset(half, 0, AUDIO_HALF_BYTES);
+  }
+
+  for (uint32_t frame = 0U; frame < AUDIO_HALF_FRAMES; frame++)
+  {
+    int32_t music_left = (int16_t)half[frame * 2U];
+    int32_t music_right = (int16_t)half[(frame * 2U) + 1U];
+    int16_t effect_left = 0;
+    int16_t effect_right = 0;
+    (void)Audio_MixerEffectFrame(&effect_left, &effect_right);
+
+    int32_t left = ((music_left * audio_mixer.music_volume) +
+                    ((int32_t)effect_left * audio_effect.volume)) >> 15;
+    int32_t right = ((music_right * audio_mixer.music_volume) +
+                     ((int32_t)effect_right * audio_effect.volume)) >> 15;
+    half[frame * 2U] = (uint16_t)Audio_MixerClamp(left);
+    half[(frame * 2U) + 1U] = (uint16_t)Audio_MixerClamp(right);
+  }
+}
+
+static HAL_StatusTypeDef Audio_MixerStart(Audio_MixerSource source,
+                                          const char *path, uint8_t loop)
+{
+  if ((audio_i2s == NULL) || (path == NULL))
+  {
+    return HAL_ERROR;
+  }
+  if (audio_mixer_running && (Audio_MixerStop() != HAL_OK))
+  {
+    return HAL_ERROR;
+  }
+
+  memset(&audio_effect, 0, sizeof(audio_effect));
+  audio_mixer.source = source;
+  audio_mixer.loop = loop ? 1U : 0U;
+  audio_mixer.source_ended = 0U;
+  audio_mixer.file_open = 0U;
+  audio_adpcm_failed = 0U;
+
+  HAL_StatusTypeDef status;
+  if (source == AUDIO_MIXER_SOURCE_PCM)
+  {
+    status = (f_open(&audio_file, path, FA_READ) == FR_OK) ? HAL_OK : HAL_ERROR;
+    audio_mixer.file_open = (status == HAL_OK) ? 1U : 0U;
+  }
+  else
+  {
+    status = Audio_MixerOpenAdpcm(path);
+  }
+  if (status != HAL_OK)
+  {
+    if (audio_mixer.file_open)
+    {
+      (void)f_close(&audio_file);
+      audio_mixer.file_open = 0U;
+    }
+    return status;
+  }
+
+  audio_first_half_free = 0U;
+  audio_second_half_free = 0U;
+  Audio_MixerFillHalf(&audio_buffer[0]);
+  Audio_MixerFillHalf(&audio_buffer[AUDIO_HALF_WORDS]);
+
+  status = HAL_I2S_Transmit_DMA(audio_i2s, audio_buffer,
+                                (uint16_t)(AUDIO_HALF_WORDS * 2U));
+  if (status != HAL_OK)
+  {
+    (void)f_close(&audio_file);
+    audio_mixer.file_open = 0U;
+    return status;
+  }
+
+  audio_mixer_running = 1U;
+  return HAL_OK;
+}
+
+HAL_StatusTypeDef Audio_MixerStartPcmMusic(const char *path, uint8_t loop)
+{
+  return Audio_MixerStart(AUDIO_MIXER_SOURCE_PCM, path, loop);
+}
+
+HAL_StatusTypeDef Audio_MixerStartImaAdpcmMusic(const char *path, uint8_t loop)
+{
+  return Audio_MixerStart(AUDIO_MIXER_SOURCE_ADPCM, path, loop);
+}
+
+HAL_StatusTypeDef Audio_MixerPlayImaAdpcmEffect(const uint8_t *data,
+                                                uint32_t size,
+                                                uint16_t volume)
+{
+  if (!audio_mixer_running || (data == NULL) ||
+      (size < IMA_ADPCM_GIMA_HEADER_SIZE) ||
+      (IMA_ADPCM_ParseGimaHeader(data, size, &audio_effect.info) != 0) ||
+      !Audio_MixerRateMatches(audio_effect.info.sample_rate) ||
+      ((uint64_t)IMA_ADPCM_GIMA_HEADER_SIZE + audio_effect.info.data_bytes > size))
+  {
+    return HAL_ERROR;
+  }
+
+  audio_effect.data = data + IMA_ADPCM_GIMA_HEADER_SIZE;
+  audio_effect.data_size = audio_effect.info.data_bytes;
+  audio_effect.data_position = 0U;
+  audio_effect.frames_remaining = audio_effect.info.frame_count;
+  audio_effect.volume = (volume > 32767U) ? 32767U : volume;
+  audio_effect.first_frame = 1U;
+  audio_effect.have_high_nibble = 0U;
+  IMA_ADPCM_StateInit(&audio_effect.state[0],
+                      audio_effect.info.initial_predictor[0],
+                      audio_effect.info.initial_step_index[0]);
+  IMA_ADPCM_StateInit(&audio_effect.state[1],
+                      audio_effect.info.initial_predictor[1],
+                      audio_effect.info.initial_step_index[1]);
+  audio_effect.active = 1U;
+  return HAL_OK;
+}
+
+void Audio_MixerStopEffect(void)
+{
+  audio_effect.active = 0U;
+}
+
+void Audio_MixerSetMusicVolume(uint16_t volume)
+{
+  audio_mixer.music_volume = (volume > 32767U) ? 32767U : volume;
+}
+
+HAL_StatusTypeDef Audio_MixerProcess(void)
+{
+  if (!audio_mixer_running)
+  {
+    return HAL_ERROR;
+  }
+
+  if (audio_first_half_free)
+  {
+    audio_first_half_free = 0U;
+    Audio_MixerFillHalf(&audio_buffer[0]);
+  }
+  if (audio_second_half_free)
+  {
+    audio_second_half_free = 0U;
+    Audio_MixerFillHalf(&audio_buffer[AUDIO_HALF_WORDS]);
+  }
+
+  return audio_adpcm_failed ? HAL_ERROR : HAL_OK;
+}
+
+HAL_StatusTypeDef Audio_MixerStop(void)
+{
+  HAL_StatusTypeDef status = HAL_OK;
+
+  if (audio_mixer_running)
+  {
+    status = HAL_I2S_DMAStop(audio_i2s);
+  }
+  audio_mixer_running = 0U;
+  audio_effect.active = 0U;
+  audio_first_half_free = 0U;
+  audio_second_half_free = 0U;
+
+  if (audio_mixer.file_open)
+  {
+    if (f_close(&audio_file) != FR_OK)
+    {
+      status = HAL_ERROR;
+    }
+    audio_mixer.file_open = 0U;
+  }
+  audio_mixer.source = AUDIO_MIXER_SOURCE_NONE;
+  return status;
+}
+
+uint8_t Audio_MixerIsRunning(void)
+{
+  return audio_mixer_running;
 }

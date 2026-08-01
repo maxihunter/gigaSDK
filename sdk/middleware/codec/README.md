@@ -31,9 +31,28 @@ mono: `M1, M2, ...`.
 Файлы создаются инструментом:
 
 ```sh
-sdk/tools/audio-to-adpcm.py input.flac music.gima
-sdk/tools/audio-to-adpcm.py --mono effect.wav effect.gima
+sdk/tools/audio-to-adpcm.py input.flac music.gim
+sdk/tools/audio-to-adpcm.py --mono effect.wav effect.gim
 ```
 
 Для воспроизведения с SD используются `Audio_PlayImaAdpcmFile()`, а для
 несжатого raw PCM остаётся `Audio_PlayPcmFile()`.
+
+## Использование в микшере
+
+Фоновая музыка читается с SD неблокирующе, а короткий эффект передаётся как
+полный образ `.gim`, заранее загруженный в RAM или размещённый во Flash:
+
+```c
+Audio_MixerStartImaAdpcmMusic("music.gim", 1);
+
+/* Вызывать в основном цикле чаще одного раза в 46 мс. */
+Audio_MixerProcess();
+
+/* effect_gim содержит и 32-байтный заголовок, и ADPCM-данные. */
+Audio_MixerPlayImaAdpcmEffect(effect_gim, effect_gim_size, 24576);
+```
+
+Повторный вызов `Audio_MixerPlayImaAdpcmEffect()` перезапускает единственный
+канал эффекта. Указатель на данные должен оставаться действительным до конца
+эффекта или вызова `Audio_MixerStopEffect()`.
