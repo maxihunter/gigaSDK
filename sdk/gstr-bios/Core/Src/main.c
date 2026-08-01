@@ -24,9 +24,9 @@
 /* USER CODE BEGIN Includes */
 #include "ili9341/ILI9341_STM32_Driver.h"
 #include "ili9341/ILI9341_GFX.h"
+#include "fonts/FreeSansBold24pt7b.h"
 #include "keyboard.h"
 #include "menu.h"
-#include "bootup.h"
 #include "string.h"
 #include <stdio.h>
 #include "test.h"
@@ -86,6 +86,7 @@ static void MX_USART1_UART_Init(void);
 static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
 static void ILI9341_Draw_Splash(void);
+static void ILI9341_Draw_Logo(void);
 static void ILI9341_FPS_Test(void);
 static uint8_t BIOS_AudioAbortRequested(void);
 static void BIOS_VideoServiceAudio(void);
@@ -193,7 +194,7 @@ int main(void)
   HAL_Delay(5000);
 #endif
   ILI9341_Draw_Splash();
-  
+  HAL_Delay(10000);
   WS2812_SetLed1Color(200, 200, 200);
   WS2812_SetLed2Color(200, 200, 200);
 
@@ -705,10 +706,35 @@ static void BIOS_LaunchApplication(void)
   }
 }
 
+static void ILI9341_Draw_Logo(void)
+{
+  static const char logo[] = "GameSTer";
+  static const uint16_t colours[] = {
+    YELLOW, ORANGE, RED, MAGENTA, MAGENTA, GREENYELLOW, GREEN, GREEN
+  };
+  const GFXfont *font = &FreeSansBold24pt7b;
+  uint16_t logo_width = 0U;
+  uint16_t x;
+
+  for (uint8_t i = 0U; logo[i] != '\0'; ++i)
+  {
+    logo_width += font->glyph[(uint8_t)logo[i] - font->first].xAdvance;
+  }
+  x = (ILI9341_SCREEN_WIDTH - logo_width) / 2U;
+
+  for (uint8_t i = 0U; logo[i] != '\0'; ++i)
+  {
+    const GFXglyph *glyph = &font->glyph[(uint8_t)logo[i] - font->first];
+
+    ILI9341_Draw_Char_Font(logo[i], x, 108U, colours[i], 1U, WHITE, font);
+    x += glyph->xAdvance;
+  }
+}
+
 static void ILI9341_Draw_Splash(void) {
   ILI9341_Fill_Screen(WHITE);
 
-  ILI9341_Draw_SmallImage(bootup_logo, 20, 70, 304, 114);
+  ILI9341_Draw_Logo();
   char buff[20] = {0};
   snprintf(buff, 20, "Bios version: %s", BIOS_VERSION);
   ILI9341_Draw_Text(buff, 118, 210, BLACK, 1, WHITE);   // 17 * 5 = 85 ; 160 - 42
