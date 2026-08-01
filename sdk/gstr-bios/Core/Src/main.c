@@ -34,6 +34,7 @@
 #include "minirle.h"
 #include "rtc/rtc_clock.h"
 #include "led/ws2812.h"
+#include "audio/audio.h"
 
 /* USER CODE END Includes */
 
@@ -44,7 +45,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+/* Raw PCM played at boot, prepared with sdk/tools/audio-to-pcm.sh. */
+#define BIOS_MUSIC_FILE "music.pcm"
+#define BIOS_MUSIC_FILE_IMA "theme.gima"
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -82,8 +85,7 @@ static void MX_I2S3_Init(void);
 /* USER CODE BEGIN PFP */
 static void ILI9341_Draw_Splash(void);
 static void ILI9341_FPS_Test(void);
-static HAL_StatusTypeDef PCM5102A_TestBeep(void);
-static HAL_StatusTypeDef PCM5102A_PlayMusicFile(const char *path);
+static uint8_t BIOS_AudioAbortRequested(void);
 static void BIOS_LaunchApplication(void);
 /* USER CODE END PFP */
 
@@ -167,6 +169,10 @@ int main(void)
   }
   MX_USART1_UART_Init();
   MX_I2S3_Init();
+  if (Audio_Init(&hi2s3, BIOS_AudioAbortRequested) != HAL_OK)
+  {
+    Error_Handler();
+  }
   if (RTC_Clock_Init() != HAL_OK)
   {
     Error_Handler();
@@ -212,15 +218,27 @@ int main(void)
   WS2812_SetLed1Color(0, 0, 0);
   WS2812_SetLed2Color(0, 0, 0);
 
-  if (PCM5102A_TestBeep() != HAL_OK)
+  Audio_ClockInfo audio_clock;
+  if (Audio_GetClockInfo(&audio_clock) == HAL_OK)
+  {
+    printf("I2S: clock=%lu Hz, sample_rate=%lu Hz, bclk=%lu Hz, prescaler=%lu\n\r",
+           (unsigned long)audio_clock.i2s_clock,
+           (unsigned long)audio_clock.sample_rate,
+           (unsigned long)audio_clock.bit_clock,
+           (unsigned long)audio_clock.prescaler);
+  }
+  if (Audio_PlayTestBeep() != HAL_OK)
   {
     printf("PCM5102A test beep failed\n\r");
   }
   if (sd_error == 0)
   {
-    if (PCM5102A_PlayMusicFile("music.pcm") != HAL_OK)
+    //printf("PCM: playing %s\n\r", BIOS_MUSIC_FILE);
+    if (Audio_PlayPcmFile(BIOS_MUSIC_FILE) != HAL_OK)
+    //printf("PCM: playing %s\n\r", BIOS_MUSIC_FILE_IMA);
+    //if (Audio_PlayImaAdpcmFile(BIOS_MUSIC_FILE_IMA) != HAL_OK)
     {
-      printf("PCM5102A music playback failed\n\r");
+      printf("PCM: playback of %s failed\n\r", BIOS_MUSIC_FILE_IMA);
     }
   }
   int port_state;
@@ -623,324 +641,10 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-/*
- * I2S3 audio streaming.
- *
- * Samples travel through a circular DMA buffer whose halves are refilled as the
- * DMA releases them. A blocking HAL_I2S_Transmit() per block does not work: the
- * peripheral holds a single word, so it runs dry while the next block is being
- * prepared and repeats stale samples at every block boundary.
- *
- * The refills run in main context, not in the DMA callbacks. The SD card reads
- * of the file player poll HAL_GetTick(), and SysTick sits at priority
- * TICK_INT_PRIORITY (15) while DMA1_Stream5 preempts at priority 0, so the tick
- * would never advance inside the callback and every timeout would hang.
- */
-#define AUDIO_HALF_FRAMES 1024U
-#define AUDIO_HALF_WORDS  (AUDIO_HALF_FRAMES * 2U)
-#define AUDIO_HALF_BYTES  (AUDIO_HALF_WORDS * sizeof(uint16_t))
-
-/* Fills a half completely, padding with silence, and returns 0 once the source
-   has no audio left to produce. */
-typedef uint8_t (*AudioFillHalf)(uint16_t *half);
-
-typedef struct {
-  uint32_t clock;
-  uint32_t prescaler;
-  uint32_t bits_per_frame;
-  uint32_t sample_rate;
-} AudioClock;
-
-/* Word aligned: FatFs passes the halves straight to the SDIO block driver,
-   which moves them through the data FIFO as 32-bit words. */
-static uint16_t audio_buffer[AUDIO_HALF_WORDS * 2U] __attribute__((aligned(4)));
-static AudioFillHalf audio_fill_half;
-static uint8_t audio_flushed_halves;
-static volatile uint8_t audio_first_half_free;
-static volatile uint8_t audio_second_half_free;
-
-void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
+/* Any key stops the boot audio so that a long file cannot hold up the BIOS. */
+static uint8_t BIOS_AudioAbortRequested(void)
 {
-  if (hi2s->Instance == SPI3) {
-    audio_first_half_free = 1U;
-  }
-}
-
-void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
-{
-  if (hi2s->Instance == SPI3) {
-    audio_second_half_free = 1U;
-  }
-}
-
-static void Audio_GetClock(AudioClock *info)
-{
-  info->clock = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2S);
-  info->prescaler = 2U * (SPI3->I2SPR & SPI_I2SPR_I2SDIV);
-  info->bits_per_frame =
-      ((SPI3->I2SCFGR & SPI_I2SCFGR_CHLEN) != 0U) ? 64U : 32U;
-  info->sample_rate = 0U;
-
-  if ((SPI3->I2SPR & SPI_I2SPR_ODD) != 0U) {
-    info->prescaler++;
-  }
-  if ((info->clock == 0U) || (info->prescaler == 0U)) {
-    return;
-  }
-
-  uint32_t clocks_per_frame = ((SPI3->I2SPR & SPI_I2SPR_MCKOE) != 0U)
-                                  ? 256U
-                                  : info->bits_per_frame;
-  info->sample_rate = info->clock / (clocks_per_frame * info->prescaler);
-}
-
-/* Refills whichever half the DMA has finished with. Returns 0 once every queued
-   sample has reached the DAC. */
-static uint8_t Audio_Pump(void)
-{
-  uint16_t *half;
-
-  if (audio_first_half_free) {
-    audio_first_half_free = 0U;
-    half = &audio_buffer[0];
-  } else if (audio_second_half_free) {
-    audio_second_half_free = 0U;
-    half = &audio_buffer[AUDIO_HALF_WORDS];
-  } else {
-    return 1U;
-  }
-
-  if (audio_fill_half(half)) {
-    return 1U;
-  }
-
-  /* The half just filled still carried the tail of the stream, so both halves
-     have to be played once more before the DMA may be stopped. */
-  if (audio_flushed_halves < 2U) {
-    audio_flushed_halves++;
-    return 1U;
-  }
-
-  return 0U;
-}
-
-/* Plays a source to completion. Stops early on any key press so that a long
-   file cannot hold up the boot sequence. */
-static HAL_StatusTypeDef Audio_Play(AudioFillHalf fill, uint32_t timeout_ms)
-{
-  audio_fill_half = fill;
-  audio_flushed_halves = 0U;
-  audio_first_half_free = 0U;
-  audio_second_half_free = 0U;
-
-  (void)fill(&audio_buffer[0]);
-  (void)fill(&audio_buffer[AUDIO_HALF_WORDS]);
-
-  HAL_StatusTypeDef status =
-      HAL_I2S_Transmit_DMA(&hi2s3, audio_buffer, (uint16_t)(AUDIO_HALF_WORDS * 2U));
-  if (status != HAL_OK) {
-    return status;
-  }
-
-  uint32_t tickstart = HAL_GetTick();
-  while (Audio_Pump())
-  {
-    if ((HAL_GetTick() - tickstart) > timeout_ms) {
-      status = HAL_TIMEOUT;
-      break;
-    }
-    if (getKeyState() != 0U) {
-      break;
-    }
-  }
-
-  if (HAL_I2S_DMAStop(&hi2s3) != HAL_OK) {
-    status = HAL_ERROR;
-  }
-
-  return status;
-}
-
-#define BEEP_TONE_COUNT   3U
-
-/* One sine period over 32 entries; sampled with linear interpolation and scaled
-   to about 73 % of full scale, so the coarse table costs no audible harmonics. */
-static const int16_t beep_sine_table[32] = {
-     0,  1171,  2296,  3333,  4243,  4989,  5543,  5885,
-  6000,  5885,  5543,  4989,  4243,  3333,  2296,  1171,
-     0, -1171, -2296, -3333, -4243, -4989, -5543, -5885,
- -6000, -5885, -5543, -4989, -4243, -3333, -2296, -1171
-};
-static const uint16_t beep_tone_frequencies[BEEP_TONE_COUNT] = {500U, 1000U, 2000U};
-
-static struct {
-  uint32_t sample_rate;
-  uint32_t tone_frames;
-  uint32_t gap_frames;
-  uint32_t fade_frames;
-  uint32_t tone;
-  uint32_t frame;
-  uint32_t phase;
-  uint32_t phase_step;
-  uint8_t in_gap;
-} beep;
-
-static uint32_t PCM5102A_BeepPhaseStep(uint32_t frequency)
-{
-  return (uint32_t)(((uint64_t)frequency << 32) / beep.sample_rate);
-}
-
-static int16_t PCM5102A_BeepNextSample(void)
-{
-  if (beep.tone >= BEEP_TONE_COUNT) {
-    return 0;
-  }
-
-  if (beep.in_gap) {
-    beep.frame++;
-    if (beep.frame >= beep.gap_frames) {
-      beep.tone++;
-      beep.in_gap = 0U;
-      beep.frame = 0U;
-      beep.phase = 0U;
-      if (beep.tone < BEEP_TONE_COUNT) {
-        beep.phase_step = PCM5102A_BeepPhaseStep(beep_tone_frequencies[beep.tone]);
-      }
-    }
-    return 0;
-  }
-
-  uint32_t index = beep.phase >> 27;
-  int32_t lower = beep_sine_table[index];
-  int32_t upper = beep_sine_table[(index + 1U) & 31U];
-  int32_t fraction = (int32_t)((beep.phase >> 11) & 0xFFFFU);
-  int32_t sample = (lower + (((upper - lower) * fraction) >> 16)) * 4;
-
-  uint32_t remaining = beep.tone_frames - beep.frame;
-  uint32_t gain = beep.fade_frames;
-  if (beep.frame < beep.fade_frames) {
-    gain = beep.frame;
-  } else if (remaining <= beep.fade_frames) {
-    gain = remaining - 1U;
-  }
-  sample = (sample * (int32_t)gain) / (int32_t)beep.fade_frames;
-
-  beep.phase += beep.phase_step;
-  beep.frame++;
-  if (beep.frame >= beep.tone_frames) {
-    beep.in_gap = 1U;
-    beep.frame = 0U;
-  }
-
-  return (int16_t)sample;
-}
-
-static uint8_t PCM5102A_BeepFillHalf(uint16_t *half)
-{
-  for (uint32_t frame = 0U; frame < AUDIO_HALF_FRAMES; frame++)
-  {
-    uint16_t sample = (uint16_t)PCM5102A_BeepNextSample();
-    half[frame * 2U] = sample;
-    half[(frame * 2U) + 1U] = sample;
-  }
-
-  return (beep.tone < BEEP_TONE_COUNT) ? 1U : 0U;
-}
-
-static HAL_StatusTypeDef PCM5102A_TestBeep(void)
-{
-  AudioClock audio_clock;
-
-  Audio_GetClock(&audio_clock);
-  if (audio_clock.sample_rate == 0U) {
-    return HAL_ERROR;
-  }
-
-  printf("I2S: clock=%lu Hz, sample_rate=%lu Hz, bclk=%lu Hz, prescaler=%lu, MCLK=%s\n\r",
-         (unsigned long)audio_clock.clock, (unsigned long)audio_clock.sample_rate,
-         (unsigned long)(audio_clock.sample_rate * audio_clock.bits_per_frame),
-         (unsigned long)audio_clock.prescaler,
-         (SPI3->I2SPR & SPI_I2SPR_MCKOE) ? "on" : "off");
-
-  memset(&beep, 0, sizeof(beep));
-  beep.sample_rate = audio_clock.sample_rate;
-  beep.tone_frames = beep.sample_rate / 4U;
-  beep.gap_frames = beep.sample_rate / 10U;
-  beep.fade_frames = beep.sample_rate / 200U;
-  if (beep.fade_frames == 0U) {
-    beep.fade_frames = 1U;
-  }
-  beep.phase_step = PCM5102A_BeepPhaseStep(beep_tone_frequencies[0]);
-
-  uint32_t total_ms =
-      (BEEP_TONE_COUNT * (beep.tone_frames + beep.gap_frames) * 1000U) / beep.sample_rate;
-
-  return Audio_Play(PCM5102A_BeepFillHalf, total_ms + 500U);
-}
-
-/*
- * Raw PCM playback from the SD card.
- *
- * The file holds exactly what the I2S peripheral expects: signed 16-bit
- * little-endian samples interleaved L, R, L, R at the sample rate configured in
- * MX_I2S3_Init(). No header is skipped and no conversion takes place, so a half
- * is filled with a single f_read() straight into the DMA buffer.
- * Use sdk/tools/audio-to-pcm.sh to produce such a file.
- */
-static FIL music_file;
-static uint8_t music_exhausted;
-
-static uint8_t PCM5102A_MusicFillHalf(uint16_t *half)
-{
-  UINT read_bytes = 0U;
-
-  if (music_exhausted) {
-    memset(half, 0, AUDIO_HALF_BYTES);
-    return 0U;
-  }
-
-  if (f_read(&music_file, half, AUDIO_HALF_BYTES, &read_bytes) != FR_OK) {
-    read_bytes = 0U;
-  }
-
-  if (read_bytes < AUDIO_HALF_BYTES) {
-    memset((uint8_t *)half + read_bytes, 0, AUDIO_HALF_BYTES - read_bytes);
-    music_exhausted = 1U;
-  }
-
-  /* A trailing partial frame is padded away rather than played half-formed. */
-  return (read_bytes >= (2U * sizeof(uint16_t))) ? 1U : 0U;
-}
-
-static HAL_StatusTypeDef PCM5102A_PlayMusicFile(const char *path)
-{
-  AudioClock audio_clock;
-
-  Audio_GetClock(&audio_clock);
-  if (audio_clock.sample_rate == 0U) {
-    return HAL_ERROR;
-  }
-
-  FRESULT res = f_open(&music_file, path, FA_READ);
-  if (res != FR_OK) {
-    printf("PCM: cannot open %s, FatFs error %d\n\r", path, (int)res);
-    return HAL_ERROR;
-  }
-
-  uint32_t frames = (uint32_t)(f_size(&music_file) / (2U * sizeof(uint16_t)));
-  uint32_t duration_ms =
-      (uint32_t)(((uint64_t)frames * 1000U) / audio_clock.sample_rate);
-
-  printf("PCM: %s, %lu frames, %lu ms\n\r", path, (unsigned long)frames,
-         (unsigned long)duration_ms);
-
-  music_exhausted = 0U;
-  HAL_StatusTypeDef status =
-      Audio_Play(PCM5102A_MusicFillHalf, duration_ms + 2000U);
-
-  (void)f_close(&music_file);
-
-  return status;
+  return (getKeyState() != 0U) ? 1U : 0U;
 }
 
 /*

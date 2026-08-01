@@ -27,6 +27,8 @@ C_SOURCES +=  \
 $(MIDDLEWARE_PATH)/keyboard/keyboard.c  \
 $(MIDDLEWARE_PATH)/led/ws2812.c \
 $(MIDDLEWARE_PATH)/rtc/rtc_clock.c \
+$(MIDDLEWARE_PATH)/audio/audio.c \
+$(MIDDLEWARE_PATH)/codec/ima_adpcm.c \
 $(MIDDLEWARE_PATH)/decoder/mp3/bitstream.c  \
 $(MIDDLEWARE_PATH)/decoder/mp3/buffers.c \
 $(MIDDLEWARE_PATH)/decoder/mp3/dct32.c  \
