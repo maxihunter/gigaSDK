@@ -63,8 +63,8 @@ DMA_HandleTypeDef hdma_spi3_tx;
 
 SD_HandleTypeDef hsd;
 
-SPI_HandleTypeDef hspi2;
-DMA_HandleTypeDef hdma_spi2_tx;
+SPI_HandleTypeDef hspi1;
+DMA_HandleTypeDef hdma_spi1_tx;
 
 TIM_HandleTypeDef htim1;
 DMA_HandleTypeDef hdma_tim1_ch2;
@@ -80,7 +80,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_SDIO_SD_Init(void);
-static void MX_SPI2_Init(void);
+static void MX_SPI1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_I2S3_Init(void);
@@ -163,7 +163,7 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_SDIO_SD_Init();
-  MX_SPI2_Init();
+  MX_SPI1_Init();
   MX_FATFS_Init();
   MX_TIM1_Init();
   if (WS2812_Init(&htim1, &hdma_tim1_ch2, TIM_CHANNEL_2) != HAL_OK)
@@ -184,12 +184,14 @@ int main(void)
   HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
   //HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
   ILI9341_Init();
-  if (Video_Init(&hspi2) != HAL_OK)
+  if (Video_Init(&hspi1) != HAL_OK)
   {
     Error_Handler();
   }
+#ifdef DISPLAY_FPS_TEST
   ILI9341_FPS_Test();
   HAL_Delay(5000);
+#endif
   ILI9341_Draw_Splash();
   
   WS2812_SetLed1Color(200, 200, 200);
@@ -242,6 +244,7 @@ int main(void)
   }
   if (sd_error == 0)
   {
+    #if 1
     //printf("PCM: playing %s\n\r", BIOS_MUSIC_FILE);
     //if (Audio_PlayPcmFile(BIOS_MUSIC_FILE) != HAL_OK)
     printf("Mixer: playing %s\n\r", BIOS_MUSIC_FILE_IMA);
@@ -250,6 +253,7 @@ int main(void)
       printf("Mixer: playback of %s failed\n\r", BIOS_MUSIC_FILE_IMA);
     }
     else
+    #endif
     {
       printf("Video: playing %s\n\r", BIOS_INTRO_VIDEO_FILE);
       if (Video_PlayFile(BIOS_INTRO_VIDEO_FILE,
@@ -411,6 +415,8 @@ static void MX_SDIO_SD_Init(void)
   hsd.Init.ClockEdge = SDIO_CLOCK_EDGE_RISING;
   hsd.Init.ClockBypass = SDIO_CLOCK_BYPASS_DISABLE;
   hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
+  /* Card initialization starts in 1-bit mode. BSP_SD_Init() negotiates and
+     switches both the card and SDIO peripheral to 4-bit mode afterwards. */
   hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
   hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
   hsd.Init.ClockDiv = 0;
@@ -421,40 +427,40 @@ static void MX_SDIO_SD_Init(void)
 }
 
 /**
-  * @brief SPI2 Initialization Function
+  * @brief SPI1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_SPI2_Init(void)
+static void MX_SPI1_Init(void)
 {
 
-  /* USER CODE BEGIN SPI2_Init 0 */
+  /* USER CODE BEGIN SPI1_Init 0 */
 
-  /* USER CODE END SPI2_Init 0 */
+  /* USER CODE END SPI1_Init 0 */
 
-  /* USER CODE BEGIN SPI2_Init 1 */
+  /* USER CODE BEGIN SPI1_Init 1 */
 
-  /* USER CODE END SPI2_Init 1 */
-  /* SPI2 parameter configuration*/
-  hspi2.Instance = SPI2;
-  hspi2.Init.Mode = SPI_MODE_MASTER;
-  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi2.Init.CRCPolynomial = 10;
-  if (HAL_SPI_Init(&hspi2) != HAL_OK)
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_1LINE;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN SPI2_Init 2 */
+  /* USER CODE BEGIN SPI1_Init 2 */
 
-  /* USER CODE END SPI2_Init 2 */
+  /* USER CODE END SPI1_Init 2 */
 
 }
 
@@ -581,9 +587,9 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
-  /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+  /* DMA2_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
   /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);

@@ -90,7 +90,7 @@
 volatile uint16_t LCD_HEIGHT = ILI9341_SCREEN_HEIGHT;
 volatile uint16_t LCD_WIDTH	 = ILI9341_SCREEN_WIDTH;
 
-extern SPI_HandleTypeDef hspi2;
+extern SPI_HandleTypeDef hspi1;
 
 /* Initialize SPI */
 void ILI9341_SPI_Init(void)
@@ -106,12 +106,12 @@ void ILI9341_SPI_Send(unsigned char SPI_Data)
 #if 1
     HAL_SPI_Transmit(HSPI_INSTANCE, &SPI_Data, 1, 1);
 #else 
-    while((SPI2->SR & SPI_SR_TXE) == RESET);
-    *((__IO uint8_t *)SPI2->DR) = SPI_Data;
-    //    SPI2->DR = SPI_Data;
+    while((SPI1->SR & SPI_SR_TXE) == RESET);
+    *((__IO uint8_t *)SPI1->DR) = SPI_Data;
+    //    SPI1->DR = SPI_Data;
     __IO uint32_t tmpreg_ovr = 0x00U;
-    tmpreg_ovr = (SPI2)->DR;
-    tmpreg_ovr = (SPI2)->SR;
+    tmpreg_ovr = (SPI1)->DR;
+    tmpreg_ovr = (SPI1)->SR;
     UNUSED(tmpreg_ovr);
 #endif
 }
@@ -393,9 +393,9 @@ void ILI9341_Draw_Colour_Burst(uint16_t Colour, uint32_t Size)
 #if 0
         for(uint32_t i = 0; i < (Sending_in_Block); i++) {
             for(uint32_t j = 0; j < Buffer_Size; j++) {
-                while((SPI2->SR & SPI_SR_TXE) == RESET) {};
-                *((__IO uint8_t *)SPI2->DR) = (const uint8_t)burst_buffer[j];
-                while((SPI2->SR & SPI_SR_BSY) != RESET) {};
+                while((SPI1->SR & SPI_SR_TXE) == RESET) {};
+                *((__IO uint8_t *)SPI1->DR) = (const uint8_t)burst_buffer[j];
+                while((SPI1->SR & SPI_SR_BSY) != RESET) {};
             }
         }
 #else 
@@ -541,6 +541,5 @@ void ILI9341_Draw_Vertical_Line_Thickness(uint16_t X, uint16_t Y, uint16_t Heigh
     ILI9341_Set_Address(X, Y, X + tick, Y + Height - 1);
     ILI9341_Draw_Colour_Burst(Colour, Height);
 }
-
 
 
