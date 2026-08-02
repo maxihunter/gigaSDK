@@ -108,28 +108,6 @@ int _write(int file, char *ptr, int len)
     }
     return -1;
 }
-/*int __io_putchar(int ch)
-{
-    ITM_SendChar(ch);
-    return (ch);
-}*/
-/*void HAL_TIM_PWM_PulseFinishedHalfCpltCallback(TIM_HandleTypeDef *htim) {
-
-    if (htim->Instance == TIM1) {
-        printf("Call DMA HALF FINISHED!\n\r");
-        ws2812_update_buffer(&ws_leds, &ws_leds.dma_buffer[0]);
-    }
-
-}
-
-void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim) {
-
-    if (htim->Instance == TIM1) {
-        printf("Call DMA ALL FINISHED!\n\r");
-        ws2812_update_buffer(&ws_leds, &ws_leds.dma_buffer[BUFFER_SIZE]);
-    }
-
-}*/
 
 /* USER CODE END 0 */
 
@@ -194,13 +172,17 @@ int main(void)
   HAL_Delay(5000);
 #endif
   ILI9341_Draw_Splash();
-  HAL_Delay(10000);
+  HAL_Delay(2000);
   WS2812_SetLed1Color(200, 200, 200);
   WS2812_SetLed2Color(200, 200, 200);
 
   FATFS fs;
   FRESULT res;
   res = f_mount(&fs, SDPath, 1);
+  printf("[SD] f_mount=%u high_speed=%u HAL_error=%08lx state=%u CLKCR=%08lx\r\n",
+         (unsigned int)res, BSP_SD_IsHighSpeed(),
+         (unsigned long)hsd.ErrorCode, (unsigned int)hsd.State,
+         (unsigned long)hsd.Instance->CLKCR);
   if (res != FR_OK) {
     ILI9341_Draw_Text("SD Card not found", 60, 220, RED, 2, BLACK);
     sd_error = 1;
@@ -217,8 +199,8 @@ int main(void)
            current_time.year, current_time.month, current_time.day,
            current_time.hours, current_time.minutes, current_time.seconds);
   }
-  minirle_decompress16(test_file_16, 568, dec_data );
-  printf("MiniRLE16 test data decompressed\n\r");
+  //minirle_decompress16(test_file_16, 568, dec_data );
+  //printf("MiniRLE16 test data decompressed\n\r");
   /* USER CODE END 2 */
 
   /* Infinite loop */

@@ -144,7 +144,7 @@ static const Menu about_menu = {
 };
 
 static const MenuItem root_items[] = {
-    MENU_APPLICATION("APP", application_dispatch),
+    MENU_APPLICATION("APPs", application_dispatch),
     MENU_SUBMENU("Network", &network_menu),
     MENU_SUBMENU("Storage", &storage_menu),
     MENU_SUBMENU("Media", &media_menu),
