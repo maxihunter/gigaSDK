@@ -412,6 +412,29 @@ void ILI9341_Draw_Colour_Burst(uint16_t Colour, uint32_t Size)
     HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_SET);
 }
 
+/*Opens a raw pixel stream into the window previously set by ILI9341_Set_Address*/
+void ILI9341_Begin_Pixel_Stream(void)
+{
+    HAL_GPIO_WritePin(LCD_DC_PORT, LCD_DC_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_RESET);
+}
+
+/*Pushes RGB565 pixel data (high byte first) into the open stream*/
+void ILI9341_Stream_Pixels(const uint8_t *Data, uint16_t Size)
+{
+    if ((Data == NULL) || (Size == 0))
+    {
+        return;
+    }
+    HAL_SPI_Transmit(HSPI_INSTANCE, (uint8_t *)Data, Size, HAL_MAX_DELAY);
+}
+
+/*Closes the raw pixel stream*/
+void ILI9341_End_Pixel_Stream(void)
+{
+    HAL_GPIO_WritePin(LCD_CS_PORT, LCD_CS_PIN, GPIO_PIN_SET);
+}
+
 //FILL THE ENTIRE SCREEN WITH SELECTED COLOUR (either #define-d ones or custom 16bit)
 /*Sets address (entire screen) and Sends Height*Width ammount of colour information to LCD*/
 void ILI9341_Fill_Screen(uint16_t Colour)

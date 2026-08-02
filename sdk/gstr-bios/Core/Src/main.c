@@ -186,7 +186,7 @@ int main(void)
   if (res != FR_OK) {
     ILI9341_Draw_Text("SD Card not found", 60, 220, RED, 2, BLACK);
     sd_error = 1;
-	HAL_Delay(2000);
+	  HAL_Delay(2000);
   }
   HAL_Delay(1000);
   uint16_t dec_data[3500] = {0};
@@ -239,8 +239,8 @@ int main(void)
     #endif
     {
       printf("Video: playing %s\n\r", BIOS_INTRO_VIDEO_FILE);
-      if (Video_PlayFile(BIOS_INTRO_VIDEO_FILE,
-                         BIOS_VideoServiceAudio, NULL) != HAL_OK)
+      //if (Video_PlayFile(BIOS_INTRO_VIDEO_FILE,
+      //                   BIOS_VideoServiceAudio, NULL) != HAL_OK)
       {
         printf("Video: playback of %s failed\n\r", BIOS_INTRO_VIDEO_FILE);
       }
