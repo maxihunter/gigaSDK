@@ -7,9 +7,11 @@
 
 #include <stdio.h>
 
+#include "fatfs.h"
 #include "fonts/FreeSans9pt7b.h"
 #include "ili9341/ILI9341_GFX.h"
 #include "ili9341/ILI9341_STM32_Driver.h"
+#include "main.h"
 
 #define MENU_X0             30U
 #define MENU_X1             290U
@@ -86,6 +88,9 @@ static int32_t rtc_hours = 0;
 static int32_t rtc_minutes = 0;
 static int32_t rtc_seconds = 0;
 static char rtc_menu_title[24] = "Date & time";
+static char status_bios_version[16];
+static char status_sd_free[20];
+static char status_battery[8];
 static bool apps_active;
 static bool apps_full_redraw;
 static bool apps_cursor_visible = true;
@@ -201,6 +206,20 @@ static void apps_line_span(int32_t x0, int32_t x1, uint16_t colour)
         apps_line[x * 2] = high;
         apps_line[(x * 2) + 1] = low;
     }
+}
+
+/* Draws the shared menu background as one continuous RGB565 stream. */
+static void apps_draw_gradient(void)
+{
+    ILI9341_Set_Address(0U, APPS_GRADIENT_Y0,
+                        ILI9341_SCREEN_WIDTH - 1U, APPS_GRADIENT_Y1);
+    ILI9341_Begin_Pixel_Stream();
+    for (uint16_t y = APPS_GRADIENT_Y0; y <= APPS_GRADIENT_Y1; y++) {
+        apps_line_span(0, ILI9341_SCREEN_WIDTH - 1,
+                       apps_gradient_colour(y));
+        ILI9341_Stream_Pixels(apps_line, (uint16_t)sizeof(apps_line));
+    }
+    ILI9341_End_Pixel_Stream();
 }
 
 static void apps_line_icon_row(const AppIconMask *icon, int32_t x, int32_t row,
@@ -492,7 +511,43 @@ static const Menu rtc_settings_menu;
 static const Menu network_menu;
 static const Menu storage_menu;
 static const Menu media_menu;
-static const Menu about_menu;
+static const Menu status_menu;
+
+static void status_format_size(char *buffer, size_t size, uint64_t bytes)
+{
+    const uint64_t gib = 1024ULL * 1024ULL * 1024ULL;
+    const uint64_t mib = 1024ULL * 1024ULL;
+
+    if (bytes >= gib) {
+        uint64_t tenths = (bytes * 10ULL) / gib;
+        snprintf(buffer, size, "%lu.%lu GB",
+                 (unsigned long)(tenths / 10ULL),
+                 (unsigned long)(tenths % 10ULL));
+    } else {
+        uint64_t tenths = (bytes * 10ULL) / mib;
+        snprintf(buffer, size, "%lu.%lu MB",
+                 (unsigned long)(tenths / 10ULL),
+                 (unsigned long)(tenths % 10ULL));
+    }
+}
+
+static void status_refresh(void)
+{
+    DWORD free_clusters;
+    FATFS *filesystem;
+
+    snprintf(status_bios_version, sizeof(status_bios_version), "%s",
+             BIOS_VERSION);
+    snprintf(status_battery, sizeof(status_battery), "%u%%", 75U);
+
+    if (f_getfree(SDPath, &free_clusters, &filesystem) == FR_OK) {
+        uint64_t free_bytes = (uint64_t)free_clusters *
+                              (uint64_t)filesystem->csize * 512ULL;
+        status_format_size(status_sd_free, sizeof(status_sd_free), free_bytes);
+    } else {
+        snprintf(status_sd_free, sizeof(status_sd_free), "unavailable");
+    }
+}
 
 static void rtc_editor_read(void)
 {
@@ -566,17 +621,21 @@ static const Menu storage_menu = {
 static const Menu media_menu = {
     "Media", media_items, MENU_ARRAY_SIZE(media_items)
 };
-static const Menu about_menu = {
-    "gigaSDK BIOS", NULL, 0U
+static const MenuItem status_items[] = {
+    MENU_INFO("BIOS version", status_bios_version),
+    MENU_INFO("SD free", status_sd_free),
+    MENU_INFO("Battery", status_battery),
+};
+static const Menu status_menu = {
+    "Status", status_items, MENU_ARRAY_SIZE(status_items)
 };
 
 static const MenuItem root_items[] = {
     MENU_ACTION("APPs", apps_open),
     MENU_SUBMENU("Network", &network_menu),
     MENU_SUBMENU("Storage", &storage_menu),
-    MENU_SUBMENU("Media", &media_menu),
     MENU_SUBMENU("Settings", &settings_menu),
-    MENU_SUBMENU("About", &about_menu),
+    MENU_SUBMENU("Status", &status_menu),
 };
 
 static const Menu root_menu = {
@@ -671,6 +730,13 @@ static void draw_item_value(const MenuItem *item, uint16_t baseline,
         ILI9341_Draw_Text_Font("START", MENU_VALUE_X, baseline,
                                foreground, 1, background, &FreeSans9pt7b);
         break;
+    case MENU_ITEM_INFO:
+        if (item->data.info != NULL) {
+            ILI9341_Draw_Text_Font(item->data.info, MENU_VALUE_X - 45U,
+                                   baseline, foreground, 1, background,
+                                   &FreeSans9pt7b);
+        }
+        break;
     }
 }
 
@@ -741,17 +807,16 @@ void MenuEngine_Draw(void)
     }
 
     if (full_redraw) {
-        ILI9341_Draw_Filled_Rectangle_Coord(MENU_X0, 16U, MENU_X1, 224U,
-                                             DARKGREY);
-        ILI9341_Draw_Filled_Rectangle_Coord(MENU_X0, 16U, MENU_X1, 16U+MENU_FIRST_ROW_Y,
-                                             CYAN);
+        apps_draw_gradient();
         ILI9341_Draw_Text_Font(menu->title, MENU_TEXT_X, MENU_TITLE_BASELINE,
-                               BLACK, 1, CYAN, &FreeSans9pt7b);
+                               WHITE, 1, apps_gradient_colour(MENU_TITLE_BASELINE),
+                               &FreeSans9pt7b);
 
         if (menu->count == 0U) {
             ILI9341_Draw_Text_Font("(empty)", MENU_TEXT_X,
                                    MENU_FIRST_ROW_Y + 16U, WHITE, 1,
-                                   DARKGREY, &FreeSans9pt7b);
+                                   apps_gradient_colour(MENU_FIRST_ROW_Y + 8U),
+                                   &FreeSans9pt7b);
         }
         for (size_t i = first; i < last; i++) {
             draw_menu_item(menu, i, first);
@@ -892,6 +957,9 @@ void MenuEngine_Select(void)
     case MENU_ITEM_SUBMENU:
         if ((item->data.submenu != NULL) &&
             (engine.depth + 1U < MENU_MAX_DEPTH)) {
+            if (item->data.submenu == &status_menu) {
+                status_refresh();
+            }
             engine.depth++;
             engine.menus[engine.depth] = item->data.submenu;
             engine.selected[engine.depth] = 0U;
@@ -923,6 +991,8 @@ void MenuEngine_Select(void)
         }
         for (;;) {
         }
+    case MENU_ITEM_INFO:
+        break;
     }
 }
 
@@ -930,10 +1000,6 @@ void MenuEngine_Back(void)
 {
     if (apps_active) {
         apps_active = false;
-        /* The menu only repaints its own box, so clear the grid area first. */
-        ILI9341_Draw_Filled_Rectangle_Coord(0U, APPS_GRADIENT_Y0,
-                                             ILI9341_SCREEN_WIDTH,
-                                             APPS_GRADIENT_Y1 + 1, DARKGREY);
         engine.rendered_valid = false;
         engine.dirty = true;
     } else if (engine.editing) {

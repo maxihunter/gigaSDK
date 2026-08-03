@@ -56,7 +56,7 @@ HAL_StatusTypeDef Audio_GetClockInfo(Audio_ClockInfo *info);
 Audio_Error Audio_GetLastError(void);
 #endif
 
-/* Three short sine bursts of rising pitch for checking the DAC wiring. */
+/* Short pulse-wave boot jingle with a pseudo-polyphonic chord ending. */
 HAL_StatusTypeDef Audio_PlayTestBeep(void);
 
 /*

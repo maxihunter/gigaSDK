@@ -194,7 +194,11 @@ int main(void)
   HAL_Delay(5000);
 #endif
   ILI9341_Draw_Splash();
-  HAL_Delay(10000);
+  if (Audio_PlayTestBeep() != HAL_OK)
+  {
+    printf("PCM5102A test beep failed\n\r");
+  }
+  HAL_Delay(500U);
   WS2812_SetLed1Color(200, 200, 200);
   WS2812_SetLed2Color(200, 200, 200);
 
@@ -226,7 +230,7 @@ int main(void)
   mainMenu_Init(BIOS_LaunchApplication);
   mainMenu_Handler();
   menuHeader_Handler(&current_time, 4);
-  
+
   WS2812_SetLed1Color(0, 0, 0);
   WS2812_SetLed2Color(0, 0, 0);
 
@@ -239,10 +243,7 @@ int main(void)
            (unsigned long)audio_clock.bit_clock,
            (unsigned long)audio_clock.prescaler);
   }
-  if (Audio_PlayTestBeep() != HAL_OK)
-  {
-    printf("PCM5102A test beep failed\n\r");
-  }
+  
   if (sd_error == 0)
   {
     #if 1
@@ -712,6 +713,8 @@ static void ILI9341_Draw_Logo(void)
   static const uint16_t colours[] = {
     YELLOW, ORANGE, RED, MAGENTA, MAGENTA, GREENYELLOW, GREEN, GREEN
   };
+  /* A slightly irregular baseline makes the word feel less mechanical. */
+  static const int8_t y_offsets[] = { -8, 5, -3, 9, -6, 3, -10, 7 };
   const GFXfont *font = &FreeSansBold24pt7b;
   uint16_t logo_width = 0U;
   uint16_t x;
@@ -726,8 +729,11 @@ static void ILI9341_Draw_Logo(void)
   {
     const GFXglyph *glyph = &font->glyph[(uint8_t)logo[i] - font->first];
 
-    ILI9341_Draw_Char_Font(logo[i], x, 108U, colours[i], 1U, WHITE, font);
+    ILI9341_Draw_Char_Font(logo[i], x,
+                           (uint16_t)(108 + y_offsets[i]),
+                           colours[i], 1U, WHITE, font);
     x += glyph->xAdvance;
+    HAL_Delay(150U);
   }
 }
 
