@@ -78,6 +78,11 @@ HAL_StatusTypeDef Audio_PlayImaAdpcmFile(const char *path);
 /* Starts non-blocking background playback from SD. loop != 0 rewinds at EOF. */
 HAL_StatusTypeDef Audio_MixerStartPcmMusic(const char *path, uint8_t loop);
 HAL_StatusTypeDef Audio_MixerStartImaAdpcmMusic(const char *path, uint8_t loop);
+/* Starts the DMA mixer without a music source. Useful for UI sounds. */
+HAL_StatusTypeDef Audio_MixerStartSilence(void);
+
+/* Short non-blocking navigation click. Starts a silent mixer if necessary. */
+HAL_StatusTypeDef Audio_PlayUiClick(void);
 
 /*
  * Mixes one memory-resident GIMA effect over the music. data must remain valid

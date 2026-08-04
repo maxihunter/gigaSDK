@@ -27,7 +27,7 @@ DEBUG = 1
 # optimization
 OPT = -Os
 
-ROM_S = 524288
+ROM_S = 131072
 RAM_S = 196608
 
 #######################################
@@ -59,6 +59,9 @@ Core/Src/system_stm32f4xx.c \
 Core/Src/sysmem.c \
 Core/Src/syscalls.c \
 Core/Src/menu.c \
+Core/Src/app_engine.c \
+Core/Src/app_loading_screen.c \
+Core/Src/app_catalog.c \
 
 
 

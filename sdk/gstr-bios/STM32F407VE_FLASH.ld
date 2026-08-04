@@ -7,7 +7,9 @@
 **  Author		: STM32CubeMX
 **
 **  Abstract    : Linker script for STM32F407VETx series
-**                512Kbytes FLASH and 128Kbytes main SRAM
+**                BIOS occupies the first 128 Kbytes of FLASH.
+**                Sectors 5-7 are reserved for a loadable application.
+**                The device has 128 Kbytes of main SRAM.
 **
 **                Set heap size, stack size and stack location according
 **                to application requirements.
@@ -62,7 +64,7 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 128K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 512K
+FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 128K
 }
 
 /* Define output sections */
@@ -80,6 +82,8 @@ SECTIONS
   .text :
   {
     . = ALIGN(4);
+    KEEP(*(.app_engine_api))
+    KEEP(*(.app_loading_api))
     *(.text)           /* .text sections (code) */
     *(.text*)          /* .text* sections (code) */
     *(.glue_7)         /* glue arm to thumb code */

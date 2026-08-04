@@ -55,6 +55,14 @@
 /* Disk status */
 static volatile DSTATUS Stat = STA_NOINIT;
 
+void SD_ForceReinitialize(void)
+{
+  extern SD_HandleTypeDef hsd;
+
+  (void)HAL_SD_DeInit(&hsd);
+  Stat = STA_NOINIT;
+}
+
 /* Private function prototypes -----------------------------------------------*/
 static DSTATUS SD_CheckStatus(BYTE lun);
 DSTATUS SD_initialize (BYTE);

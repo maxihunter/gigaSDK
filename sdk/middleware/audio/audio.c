@@ -701,6 +701,11 @@ static struct
   uint8_t active;
 } audio_effect;
 
+/* Procedural UI sound, kept separate from the GIMA effect slot so callers do
+   not need to embed a tiny audio asset merely to acknowledge navigation. */
+static uint16_t audio_ui_click_remaining;
+#define AUDIO_UI_CLICK_FRAMES 132U
+
 static int16_t Audio_MixerClamp(int32_t sample)
 {
   if (sample > 32767)
@@ -919,6 +924,15 @@ static void Audio_MixerFillHalf(uint16_t *half)
                     ((int32_t)effect_left * audio_effect.volume)) >> 15;
     int32_t right = ((music_right * audio_mixer.music_volume) +
                      ((int32_t)effect_right * audio_effect.volume)) >> 15;
+    if (audio_ui_click_remaining != 0U)
+    {
+      uint32_t elapsed = AUDIO_UI_CLICK_FRAMES - audio_ui_click_remaining;
+      int32_t envelope = (int32_t)audio_ui_click_remaining * 72;
+      int32_t click = ((elapsed / 3U) & 1U) ? -envelope : envelope;
+      left += click;
+      right += click;
+      audio_ui_click_remaining--;
+    }
     half[frame * 2U] = (uint16_t)Audio_MixerClamp(left);
     half[(frame * 2U) + 1U] = (uint16_t)Audio_MixerClamp(right);
   }
@@ -927,7 +941,8 @@ static void Audio_MixerFillHalf(uint16_t *half)
 static HAL_StatusTypeDef Audio_MixerStart(Audio_MixerSource source,
                                           const char *path, uint8_t loop)
 {
-  if ((audio_i2s == NULL) || (path == NULL))
+  if ((audio_i2s == NULL) ||
+      ((source != AUDIO_MIXER_SOURCE_NONE) && (path == NULL)))
   {
     return HAL_ERROR;
   }
@@ -944,7 +959,11 @@ static HAL_StatusTypeDef Audio_MixerStart(Audio_MixerSource source,
   audio_adpcm_failed = 0U;
 
   HAL_StatusTypeDef status;
-  if (source == AUDIO_MIXER_SOURCE_PCM)
+  if (source == AUDIO_MIXER_SOURCE_NONE)
+  {
+    status = HAL_OK;
+  }
+  else if (source == AUDIO_MIXER_SOURCE_PCM)
   {
     status = (f_open(&audio_file, path, FA_READ) == FR_OK) ? HAL_OK : HAL_ERROR;
     audio_mixer.file_open = (status == HAL_OK) ? 1U : 0U;
@@ -972,8 +991,11 @@ static HAL_StatusTypeDef Audio_MixerStart(Audio_MixerSource source,
                                 (uint16_t)(AUDIO_HALF_WORDS * 2U));
   if (status != HAL_OK)
   {
-    (void)f_close(&audio_file);
-    audio_mixer.file_open = 0U;
+    if (audio_mixer.file_open)
+    {
+      (void)f_close(&audio_file);
+      audio_mixer.file_open = 0U;
+    }
     return status;
   }
 
@@ -989,6 +1011,21 @@ HAL_StatusTypeDef Audio_MixerStartPcmMusic(const char *path, uint8_t loop)
 HAL_StatusTypeDef Audio_MixerStartImaAdpcmMusic(const char *path, uint8_t loop)
 {
   return Audio_MixerStart(AUDIO_MIXER_SOURCE_ADPCM, path, loop);
+}
+
+HAL_StatusTypeDef Audio_MixerStartSilence(void)
+{
+  return Audio_MixerStart(AUDIO_MIXER_SOURCE_NONE, NULL, 0U);
+}
+
+HAL_StatusTypeDef Audio_PlayUiClick(void)
+{
+  if (!audio_mixer_running && (Audio_MixerStartSilence() != HAL_OK))
+  {
+    return HAL_ERROR;
+  }
+  audio_ui_click_remaining = AUDIO_UI_CLICK_FRAMES;
+  return HAL_OK;
 }
 
 HAL_StatusTypeDef Audio_MixerPlayImaAdpcmEffect(const uint8_t *data,
@@ -1062,6 +1099,7 @@ HAL_StatusTypeDef Audio_MixerStop(void)
   }
   audio_mixer_running = 0U;
   audio_effect.active = 0U;
+  audio_ui_click_remaining = 0U;
   audio_first_half_free = 0U;
   audio_second_half_free = 0U;
 
