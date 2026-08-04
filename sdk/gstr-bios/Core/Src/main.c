@@ -36,6 +36,8 @@
 #include "led/ws2812.h"
 #include "audio/audio.h"
 #include "video/video.h"
+#include "app_catalog.h"
+#include "sd_diskio.h"
 
 /* USER CODE END Includes */
 
@@ -73,6 +75,7 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 unsigned int sd_error = 0;
+static FATFS bios_filesystem;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -91,6 +94,8 @@ static void ILI9341_FPS_Test(void);
 static uint8_t BIOS_AudioAbortRequested(void);
 static void BIOS_VideoServiceAudio(void);
 static void BIOS_LaunchApplication(void);
+static FRESULT BIOS_MountSd(void);
+static const char *BIOS_FatFsError(FRESULT result);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -107,6 +112,39 @@ int _write(int file, char *ptr, int len)
             return -1;
     }
     return -1;
+}
+
+static const char *BIOS_FatFsError(FRESULT result)
+{
+  static const char *const names[] = {
+    "OK", "DISK_ERR", "INT_ERR", "NOT_READY", "NO_FILE", "NO_PATH",
+    "INVALID_NAME", "DENIED", "EXIST", "INVALID_OBJECT",
+    "WRITE_PROTECTED", "INVALID_DRIVE", "NOT_ENABLED", "NO_FILESYSTEM",
+    "MKFS_ABORTED", "TIMEOUT", "LOCKED", "NOT_ENOUGH_CORE",
+    "TOO_MANY_OPEN_FILES", "INVALID_PARAMETER"
+  };
+  unsigned int value = (unsigned int)result;
+  return (value < (sizeof(names) / sizeof(names[0]))) ? names[value] : "UNKNOWN";
+}
+
+static FRESULT BIOS_MountSd(void)
+{
+  FRESULT result = FR_NOT_READY;
+
+  for (unsigned int attempt = 1U; attempt <= 3U; ++attempt) {
+    result = f_mount(&bios_filesystem, SDPath, 1U);
+    printf("SD mount attempt %u: %u (%s)\n\r", attempt,
+           (unsigned int)result, BIOS_FatFsError(result));
+    if (result == FR_OK) return FR_OK;
+
+    /* A format error is deterministic. Retrying it only hides the useful
+       diagnostic; transfer/initialization errors can recover after reset. */
+    if (result == FR_NO_FILESYSTEM) break;
+    (void)f_mount(NULL, SDPath, 0U);
+    SD_ForceReinitialize();
+    HAL_Delay(100U);
+  }
+  return result;
 }
 /*int __io_putchar(int ch)
 {
@@ -202,13 +240,21 @@ int main(void)
   WS2812_SetLed1Color(200, 200, 200);
   WS2812_SetLed2Color(200, 200, 200);
 
-  FATFS fs;
   FRESULT res;
-  res = f_mount(&fs, SDPath, 1);
+  res = BIOS_MountSd();
   if (res != FR_OK) {
-    ILI9341_Draw_Text("SD Card not found", 60, 220, RED, 2, BLACK);
+    const char *message = (res == FR_NO_FILESYSTEM) ?
+                          "Unsupported SD format" : "SD Card read error";
+    ILI9341_Draw_Text(message, 45, 220, RED, 2, BLACK);
     sd_error = 1;
 	  HAL_Delay(2000);
+  } else {
+    ILI9341_Draw_Text("Reading apps...", 60, 220, BLACK, 2, WHITE);
+    AppEngineStatus catalog_status = AppCatalog_Refresh();
+    printf("Applications: %lu%s, scan=%s\n\r",
+           (unsigned long)AppCatalog_Count(),
+           AppCatalog_WasTruncated() ? "+" : "",
+           AppEngine_StatusString(catalog_status));
   }
   HAL_Delay(1000);
   uint16_t dec_data[3500] = {0};
@@ -243,10 +289,10 @@ int main(void)
            (unsigned long)audio_clock.bit_clock,
            (unsigned long)audio_clock.prescaler);
   }
-  
+#if 0
   if (sd_error == 0)
   {
-    #if 1
+    
     //printf("PCM: playing %s\n\r", BIOS_MUSIC_FILE);
     //if (Audio_PlayPcmFile(BIOS_MUSIC_FILE) != HAL_OK)
     printf("Mixer: playing %s\n\r", BIOS_MUSIC_FILE_IMA);
@@ -255,7 +301,6 @@ int main(void)
       printf("Mixer: playback of %s failed\n\r", BIOS_MUSIC_FILE_IMA);
     }
     else
-    #endif
     {
       printf("Video: playing %s\n\r", BIOS_INTRO_VIDEO_FILE);
       //if (Video_PlayFile(BIOS_INTRO_VIDEO_FILE,
@@ -269,6 +314,7 @@ int main(void)
       menuHeader_Handler(&current_time, 4);
     }
   }
+#endif
   int port_state;
   uint32_t previous_keymap = 0U;
   while (1)

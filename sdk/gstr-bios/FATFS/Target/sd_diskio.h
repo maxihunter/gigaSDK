@@ -33,6 +33,9 @@
 /* Exported constants --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
 extern const Diskio_drvTypeDef  SD_Driver;
+/* Drops the cached disk status so the next FatFs mount fully reinitializes
+ * SDIO and the card after a transient transfer error. */
+void SD_ForceReinitialize(void);
 
 /* USER CODE BEGIN lastSection */
 /* can be used to modify / undefine previous code or add new definitions */
