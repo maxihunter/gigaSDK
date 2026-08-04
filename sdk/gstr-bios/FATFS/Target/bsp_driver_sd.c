@@ -38,6 +38,19 @@
 
 extern SD_HandleTypeDef hsd;
 
+static uint32_t sd_last_init_error;
+static uint8_t sd_wide_bus;
+
+uint32_t BSP_SD_GetLastInitError(void)
+{
+  return sd_last_init_error;
+}
+
+uint8_t BSP_SD_IsWideBus(void)
+{
+  return sd_wide_bus;
+}
+
 /* USER CODE BEGIN BeforeInitSection */
 /* can be used to modify / undefine following code or add code */
 /* USER CODE END BeforeInitSection */
@@ -47,21 +60,49 @@ extern SD_HandleTypeDef hsd;
   */
 __weak uint8_t BSP_SD_Init(void)
 {
-  uint8_t sd_state = MSD_OK;
+  uint8_t sd_state;
+  sd_last_init_error = HAL_SD_ERROR_NONE;
+  sd_wide_bus = 0U;
   /* Check if the SD card is plugged in the slot */
   if (BSP_SD_IsDetected() != SD_PRESENT)
   {
     return MSD_ERROR;
   }
   /* HAL SD initialization */
-  sd_state = HAL_SD_Init(&hsd);
-  if ((sd_state == MSD_OK) &&
-      (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) != HAL_OK))
+  sd_state = (uint8_t)HAL_SD_Init(&hsd);
+  if (sd_state != MSD_OK)
   {
-    sd_state = MSD_ERROR;
+    sd_last_init_error = HAL_SD_GetError(&hsd);
+    (void)HAL_SD_DeInit(&hsd);
+    HAL_Delay(20U);
+    sd_state = (uint8_t)HAL_SD_Init(&hsd);
+  }
+  if (sd_state != MSD_OK)
+  {
+    sd_last_init_error = HAL_SD_GetError(&hsd);
+    return MSD_ERROR;
   }
 
-  return sd_state;
+  if (HAL_SD_ConfigWideBusOperation(&hsd, SDIO_BUS_WIDE_4B) == HAL_OK)
+  {
+    sd_wide_bus = 1U;
+  }
+  else
+  {
+    /* Some cards or boards cannot complete ACMD6 reliably. Reinitialize in
+       the mandatory 1-bit mode instead of making the whole volume unavailable. */
+    sd_last_init_error = HAL_SD_GetError(&hsd);
+    (void)HAL_SD_DeInit(&hsd);
+    hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
+    HAL_Delay(20U);
+    if (HAL_SD_Init(&hsd) != HAL_OK)
+    {
+      sd_last_init_error = HAL_SD_GetError(&hsd);
+      return MSD_ERROR;
+    }
+  }
+
+  return MSD_OK;
 }
 /* USER CODE BEGIN AfterInitSection */
 /* can be used to modify previous code / undefine following code / add code */

@@ -61,6 +61,8 @@
 /* USER CODE BEGIN BSP_H_CODE */
 /* Exported functions --------------------------------------------------------*/
 uint8_t BSP_SD_Init(void);
+uint32_t BSP_SD_GetLastInitError(void);
+uint8_t BSP_SD_IsWideBus(void);
 uint8_t BSP_SD_ITConfig(void);
 void    BSP_SD_DetectIT(void);
 void    BSP_SD_DetectCallback(void);

@@ -133,8 +133,11 @@ static FRESULT BIOS_MountSd(void)
 
   for (unsigned int attempt = 1U; attempt <= 3U; ++attempt) {
     result = f_mount(&bios_filesystem, SDPath, 1U);
-    printf("SD mount attempt %u: %u (%s)\n\r", attempt,
-           (unsigned int)result, BIOS_FatFsError(result));
+    printf("SD mount attempt %u: %u (%s), HAL state=%u error=0x%08lx, bus=%s\n\r",
+           attempt, (unsigned int)result, BIOS_FatFsError(result),
+           (unsigned int)HAL_SD_GetState(&hsd),
+           (unsigned long)BSP_SD_GetLastInitError(),
+           BSP_SD_IsWideBus() ? "4-bit" : "1-bit");
     if (result == FR_OK) return FR_OK;
 
     /* A format error is deterministic. Retrying it only hides the useful
