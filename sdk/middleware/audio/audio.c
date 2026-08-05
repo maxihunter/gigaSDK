@@ -704,7 +704,9 @@ static struct
 /* Procedural UI sound, kept separate from the GIMA effect slot so callers do
    not need to embed a tiny audio asset merely to acknowledge navigation. */
 static uint16_t audio_ui_click_remaining;
+static uint8_t audio_ui_sound_kind;
 #define AUDIO_UI_CLICK_FRAMES 132U
+#define AUDIO_UI_BOUNCE_FRAMES 220U
 
 static int16_t Audio_MixerClamp(int32_t sample)
 {
@@ -926,9 +928,15 @@ static void Audio_MixerFillHalf(uint16_t *half)
                      ((int32_t)effect_right * audio_effect.volume)) >> 15;
     if (audio_ui_click_remaining != 0U)
     {
-      uint32_t elapsed = AUDIO_UI_CLICK_FRAMES - audio_ui_click_remaining;
-      int32_t envelope = (int32_t)audio_ui_click_remaining * 72;
-      int32_t click = ((elapsed / 3U) & 1U) ? -envelope : envelope;
+      uint32_t total = (audio_ui_sound_kind == 0U) ?
+          AUDIO_UI_CLICK_FRAMES : AUDIO_UI_BOUNCE_FRAMES;
+      uint32_t elapsed = total - audio_ui_click_remaining;
+      int32_t envelope = (audio_ui_sound_kind == 0U) ?
+          (int32_t)audio_ui_click_remaining * 72 :
+          (int32_t)audio_ui_click_remaining * 42;
+      uint32_t half_period = (audio_ui_sound_kind == 0U) ? 3U :
+          (4U + elapsed / 55U);
+      int32_t click = ((elapsed / half_period) & 1U) ? -envelope : envelope;
       left += click;
       right += click;
       audio_ui_click_remaining--;
@@ -1025,6 +1033,18 @@ HAL_StatusTypeDef Audio_PlayUiClick(void)
     return HAL_ERROR;
   }
   audio_ui_click_remaining = AUDIO_UI_CLICK_FRAMES;
+  audio_ui_sound_kind = 0U;
+  return HAL_OK;
+}
+
+HAL_StatusTypeDef Audio_PlayUiBounce(void)
+{
+  if (!audio_mixer_running && (Audio_MixerStartSilence() != HAL_OK))
+  {
+    return HAL_ERROR;
+  }
+  audio_ui_click_remaining = AUDIO_UI_BOUNCE_FRAMES;
+  audio_ui_sound_kind = 1U;
   return HAL_OK;
 }
 

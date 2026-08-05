@@ -243,6 +243,7 @@ int main(void)
   WS2812_SetLed1Color(200, 200, 200);
   WS2812_SetLed2Color(200, 200, 200);
 
+  ILI9341_Draw_Text("Checking SD card", 120, 220, BLACK, 1, WHITE);
   FRESULT res;
   res = BIOS_MountSd();
   if (res != FR_OK) {
@@ -252,7 +253,8 @@ int main(void)
     sd_error = 1;
 	  HAL_Delay(2000);
   } else {
-    ILI9341_Draw_Text("Reading apps...", 60, 220, BLACK, 2, WHITE);
+    ILI9341_Draw_Filled_Rectangle_Coord(100,220, 250, 240, WHITE);
+    ILI9341_Draw_Text("Reading apps", 130, 220, BLACK, 1, WHITE);
     AppEngineStatus catalog_status = AppCatalog_Refresh();
     printf("Applications: %lu%s, scan=%s\n\r",
            (unsigned long)AppCatalog_Count(),

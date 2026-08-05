@@ -83,6 +83,8 @@ HAL_StatusTypeDef Audio_MixerStartSilence(void);
 
 /* Short non-blocking navigation click. Starts a silent mixer if necessary. */
 HAL_StatusTypeDef Audio_PlayUiClick(void);
+/* Short brighter effect intended for collisions in simple games. */
+HAL_StatusTypeDef Audio_PlayUiBounce(void);
 
 /*
  * Mixes one memory-resident GIMA effect over the music. data must remain valid
