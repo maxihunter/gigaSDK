@@ -291,7 +291,20 @@ int main(void)
     for (;;) {
         audio_service();
         uint32_t keys = getKeyState(), pressed = keys & ~previous; previous = keys;
-        if (pressed & KBRD_BTN_UP) {
+        /* As on the BIOS menu, SELECT has priority: this keyboard revision can
+           briefly report DOWN together with A while the A contact settles. */
+        if (pressed & KBRD_BTN_1) {
+            if (menu_item == 0U) { (void)Audio_PlayUiClick(); wait_keys_release(); play_match(); draw_main_menu(); previous = 0U; }
+            else if (menu_item == 1U) { difficulty = (difficulty + 1U) % 3U; (void)Audio_PlayUiClick(); draw_menu_item(1U); }
+            else if (menu_item == 2U) {
+                music_enabled ^= 1U;
+                if (music_enabled) start_music(); else (void)Audio_MixerStop();
+                (void)Audio_PlayUiClick(); draw_menu_item(2U);
+            }
+            else NVIC_SystemReset();
+        } else if (pressed & KBRD_BTN_2) {
+            NVIC_SystemReset();
+        } else if (pressed & KBRD_BTN_UP) {
             uint8_t old_item = menu_item;
             menu_item = menu_item ? menu_item - 1U : 3U;
             (void)Audio_PlayUiClick();
@@ -311,16 +324,7 @@ int main(void)
             music_enabled ^= 1U;
             if (music_enabled) start_music(); else (void)Audio_MixerStop();
             (void)Audio_PlayUiClick(); draw_menu_item(2U);
-        } else if (pressed & KBRD_BTN_1) {
-            if (menu_item == 0U) { (void)Audio_PlayUiClick(); wait_keys_release(); play_match(); draw_main_menu(); previous = 0U; }
-            else if (menu_item == 1U) { difficulty = (difficulty + 1U) % 3U; (void)Audio_PlayUiClick(); draw_menu_item(1U); }
-            else if (menu_item == 2U) {
-                music_enabled ^= 1U;
-                if (music_enabled) start_music(); else (void)Audio_MixerStop();
-                (void)Audio_PlayUiClick(); draw_menu_item(2U);
-            }
-            else NVIC_SystemReset();
-        } else if (pressed & KBRD_BTN_2) NVIC_SystemReset();
+        }
         HAL_Delay(5U);
     }
 }

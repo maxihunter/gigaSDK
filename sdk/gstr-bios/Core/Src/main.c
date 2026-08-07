@@ -336,7 +336,7 @@ int main(void)
     previous_keymap = keymap;
 
     if (pressed_keys) {
-        //printf("KEYDOWN=%lx\n\r", (unsigned long)pressed_keys);
+        printf("KEYDOWN=%lx\n\r", (unsigned long)pressed_keys);
         if (pressed_keys & KBRD_BTN_1) {
             mainMenu_TriggerSelect();
         } else
